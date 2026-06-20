@@ -7,7 +7,7 @@ const GAMES_DIR = path.resolve(__dirname, "../games");
 export default defineConfig({
   server: {
     port: 3000,
-    proxy: { "/api": "http://localhost:3002" },
+    proxy: { "/api/": "http://localhost:3002" },
     plugins: [],
   },
   plugins: [

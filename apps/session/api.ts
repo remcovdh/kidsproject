@@ -10,7 +10,7 @@ function b64svg(pose: string, bg: string): string {
     <text x="100" y="115" font-size="28" text-anchor="middle" fill="white"
       font-family="sans-serif" font-weight="bold">${pose}</text>
   </svg>`;
-  return `data:image/svg+xml;base64,${btoa(svg)}`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
 let _versionCount = 0;

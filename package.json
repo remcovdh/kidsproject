@@ -1,0 +1,18 @@
+{
+  "name": "kidsproject",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w apps/session\" \"npm run dev -w apps/admin\"",
+    "build": "npm run build -w packages/ai && npm run build -w packages/shared && npm run build -w apps/session && npm run build -w apps/admin",
+    "typecheck": "tsc --build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.4.5"
+  }
+}

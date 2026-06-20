@@ -1,0 +1,80 @@
+:root {
+  --color-primary: #ff6b35;
+  --color-secondary: #4ecdc4;
+  --color-bg: #fff9f0;
+  --color-text: #2d2d2d;
+  --color-muted: #888;
+  --radius: 1.5rem;
+  --font: "Segoe UI", system-ui, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  background: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#app {
+  width: 100%;
+  max-width: 680px;
+  padding: 2rem;
+}
+
+/* Steps */
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  text-align: center;
+}
+
+.step__title {
+  font-size: clamp(2rem, 6vw, 3rem);
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.step__name-input {
+  width: 100%;
+  font-size: 2rem;
+  padding: 0.75rem 1.25rem;
+  border: 3px solid var(--color-primary);
+  border-radius: var(--radius);
+  text-align: center;
+  outline: none;
+  background: white;
+}
+
+.step__name-input:focus {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+/* Buttons */
+.btn {
+  font-size: 1.5rem;
+  font-weight: 700;
+  padding: 0.75rem 2rem;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: transform 0.1s, opacity 0.1s;
+}
+
+.btn:active { transform: scale(0.97); }
+
+.btn--primary {
+  background: var(--color-primary);
+  color: white;
+}
+
+.btn--primary:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}

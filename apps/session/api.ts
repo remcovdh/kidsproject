@@ -6,8 +6,13 @@ const API = "";
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const r = await fetch(url, options);
   if (!r.ok) {
-    let msg = `Server returned ${r.status}`;
-    try { const b = await r.json(); if (b?.error) msg = b.error; } catch { /* */ }
+    let msg: string;
+    if (r.status === 413) {
+      msg = "Photo is too large (max 20 MB). Try a lower resolution or move closer to the drawing.";
+    } else {
+      msg = `Server returned ${r.status}`;
+      try { const b = await r.json(); if (b?.error) msg = b.error; } catch { /* */ }
+    }
     throw new Error(msg);
   }
   return r.json() as Promise<T>;

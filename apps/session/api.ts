@@ -64,6 +64,7 @@ export interface GalleryItem {
   gameType: "catcher" | "jumper";
   sprites: SpritePack;
   backgroundUrl?: string | null;
+  sounds?: Record<string, string>;
 }
 
 // ── Mock published-game store ─────────────────────────────────────────────────
@@ -73,6 +74,7 @@ interface MockPublished {
   childName: string;
   sprites: SpritePack;
   backgroundUrl?: string | null;
+  sounds?: Record<string, string>;
 }
 
 const _published: MockPublished[] = [];
@@ -169,6 +171,7 @@ export async function publishGame(
         childName: _mockMeta.childName,
         sprites:   _mockMeta.sprites,
         backgroundUrl,
+        sounds,
       });
     }
     await sleep(500);
@@ -191,6 +194,7 @@ export async function fetchGallery(sessionId: string): Promise<GalleryItem[]> {
       gameType:     "catcher" as const,
       sprites:      g.sprites,
       backgroundUrl: g.backgroundUrl,
+      sounds:       g.sounds,
     }));
     const demoGames: GalleryItem[] = [
       { childId: "c1", childName: "Emma",  previewUrl: svgUrl("idle", "#FF6B35"), gameType: "catcher", sprites: { idle: svgUrl("idle", "#FF6B35"), move: svgUrl("move", "#4ECDC4"), action: svgUrl("action!", "#F59E0B"), celebrate: svgUrl("yay!", "#A8E6CF"), collectible: svgUrl("★", "#FFE66D") } },

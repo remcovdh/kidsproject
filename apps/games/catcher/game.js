@@ -14,8 +14,8 @@ const ASSETS = {
 };
 
 const SOUND_IDS = {
-  catch: params.get("sound_catch") ?? "catch",
-  miss:  params.get("sound_miss")  ?? "miss",
+  catch: spriteConfig.sound_catch ?? params.get("sound_catch") ?? "boing",
+  miss:  spriteConfig.sound_miss  ?? params.get("sound_miss")  ?? "splat",
 };
 
 const canvas   = document.getElementById("game");

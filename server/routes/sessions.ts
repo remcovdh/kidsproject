@@ -75,7 +75,7 @@ sessionRouter.post("/:id/children", (req, res) => {
 sessionRouter.get("/:id/gallery", (req, res) => {
   const rows = db.prepare(`
     SELECT pg.id, c.id AS child_id, c.name AS child_name, c.game_type,
-           sv.sprites, pg.background_url
+           sv.sprites, pg.background_url, pg.sounds
     FROM   published_games pg
     JOIN   children c        ON c.id  = pg.child_id
     JOIN   sprite_versions sv ON sv.id = pg.sprite_version_id
@@ -83,11 +83,12 @@ sessionRouter.get("/:id/gallery", (req, res) => {
     ORDER  BY pg.published_at DESC
   `).all(req.params.id) as Array<{
     id: string; child_id: string; child_name: string; game_type: string;
-    sprites: string; background_url: string | null;
+    sprites: string; background_url: string | null; sounds: string | null;
   }>;
 
   res.json(rows.map((r) => {
     const sprites = JSON.parse(r.sprites) as Record<string, string>;
+    const sounds  = r.sounds ? (JSON.parse(r.sounds) as Record<string, string>) : {};
     return {
       childId:      r.child_id,
       childName:    r.child_name,
@@ -95,6 +96,7 @@ sessionRouter.get("/:id/gallery", (req, res) => {
       gameType:     r.game_type,
       sprites,
       backgroundUrl: r.background_url,
+      sounds,
     };
   }));
 });

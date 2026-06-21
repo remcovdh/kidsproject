@@ -17,6 +17,16 @@ const EVENTS = [
   { id: "win",   label: "When you win"             },
 ];
 
+function persistSoundAssignments(sounds: Record<string, string>) {
+  const existing = JSON.parse(localStorage.getItem("kidsproject_sprites") ?? "{}");
+  localStorage.setItem("kidsproject_sprites", JSON.stringify({
+    ...existing,
+    sound_catch: sounds["catch"] ?? "boing",
+    sound_miss:  sounds["miss"]  ?? "splat",
+    sound_win:   sounds["win"]   ?? "giggle",
+  }));
+}
+
 export function renderCustomize(
   container: HTMLElement,
   state: SessionState,
@@ -69,6 +79,7 @@ if (caught) {
     container.querySelectorAll<HTMLButtonElement>(".sound-chip").forEach((chip) => {
       chip.addEventListener("click", () => {
         sounds[chip.dataset.event!] = chip.dataset.sound!;
+        persistSoundAssignments(sounds);
         const audio = new Audio(`/games/catcher/assets/sounds/${chip.dataset.sound}.mp3`);
         audio.addEventListener("error", () => {
           const notice = container.querySelector<HTMLElement>("#sound-notice");

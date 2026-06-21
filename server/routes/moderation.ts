@@ -3,7 +3,12 @@ import { Router } from "express";
 export const moderationRouter = Router();
 
 const BLOCKED_WORDS: string[] = [
-  // Add age-inappropriate terms here
+  // Violence
+  "kill", "murder", "stab", "shoot", "blood", "dead",
+  // Explicit
+  "sex", "porn", "nude", "naked",
+  // Strong profanity (list is intentionally short — teacher is always present)
+  "fuck", "shit", "bitch", "cunt", "asshole",
 ];
 
 // POST /api/moderation/check — check free-text input before sending to AI

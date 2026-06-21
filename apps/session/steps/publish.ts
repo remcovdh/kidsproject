@@ -31,10 +31,10 @@ export function renderPublish(
         state.childId ?? "anon",
         state.activeSpriteVersionId ?? "",
         state.soundAssignments,
+        state.backgroundUrl,
         {
-          childName:    state.childName ?? "You",
-          sprites:      version?.sprites ?? { idle: "", move: "", action: "", celebrate: "" },
-          backgroundUrl: state.backgroundUrl,
+          childName: state.childName ?? "You",
+          sprites:   version?.sprites ?? { idle: "", move: "", action: "", celebrate: "" },
         }
       );
       goToStep("gallery", { published: true });

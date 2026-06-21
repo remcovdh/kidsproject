@@ -3,5 +3,8 @@ dist/
 .env
 .env.local
 uploads/
+data/
 *.db
 *.db-journal
+*.db-shm
+*.db-wal

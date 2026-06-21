@@ -90,7 +90,10 @@ export async function uploadDrawing(file: File): Promise<{ drawingUrl: string; d
   }
   const form = new FormData();
   form.append("drawing", file);
-  return fetch(`${API}/api/uploads/drawing`, { method: "POST", body: form }).then((r) => r.json());
+  const { drawingUrl } = await fetch(`${API}/api/uploads/drawing`, { method: "POST", body: form }).then((r) => r.json());
+  // Compute base64 client-side so we don't round-trip large data through the server
+  const drawingBase64 = await fileToBase64(file);
+  return { drawingUrl, drawingBase64 };
 }
 
 export async function checkModeration(text: string): Promise<{ allowed: boolean }> {
@@ -137,8 +140,9 @@ export async function publishGame(
   childId: string,
   spriteVersionId: string,
   sounds: Record<string, string>,
-  // Server derives name/sprites from childId — only needed for mock gallery
-  _mockMeta?: { childName: string; sprites: SpritePack; backgroundUrl?: string | null }
+  backgroundUrl: string | null,
+  // Only needed for the mock gallery (server derives these from the DB)
+  _mockMeta?: { childName: string; sprites: SpritePack }
 ): Promise<void> {
   if (MOCK_MODE) {
     if (_mockMeta) {
@@ -146,7 +150,7 @@ export async function publishGame(
         childId,
         childName: _mockMeta.childName,
         sprites:   _mockMeta.sprites,
-        backgroundUrl: _mockMeta.backgroundUrl,
+        backgroundUrl,
       });
     }
     await sleep(500);
@@ -155,7 +159,7 @@ export async function publishGame(
   await fetch(`${API}/api/sessions/publish`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ childId, spriteVersionId, sounds }),
+    body: JSON.stringify({ childId, spriteVersionId, sounds, backgroundUrl }),
   });
 }
 

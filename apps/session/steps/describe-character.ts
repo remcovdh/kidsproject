@@ -121,7 +121,7 @@ export function renderDescribeCharacter(
       return;
     }
     goToStep("generate-sprites", {
-      characterDescription: sel as CharacterDescription,
+      characterDescription: sel as unknown as CharacterDescription,
     });
   });
 }

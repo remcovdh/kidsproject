@@ -13,7 +13,7 @@ export interface SpriteBuffers {
 
 export interface ServerAiProvider {
   generateSprites(description: string, drawingBase64: string): Promise<SpriteBuffers>;
-  generateBackground?(description: string): Promise<SpriteFile>;
+  generateBackground?(description: string, imageBase64?: string, styleDescription?: string): Promise<SpriteFile>;
 }
 
 export async function getServerProvider(providerName: string): Promise<ServerAiProvider> {

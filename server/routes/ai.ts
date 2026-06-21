@@ -72,9 +72,11 @@ aiRouter.post("/sprites", async (req, res) => {
 // Body: { description, aiProvider? }
 // Returns: { backgroundUrl }
 aiRouter.post("/background", async (req, res) => {
-  const { description, aiProvider } = req.body as { description?: string; aiProvider?: string };
-  if (!description?.trim()) {
-    return res.status(400).json({ error: "description is required" });
+  const { description, aiProvider, imageBase64, styleDescription } = req.body as {
+    description?: string; aiProvider?: string; imageBase64?: string; styleDescription?: string;
+  };
+  if (!description?.trim() && !imageBase64) {
+    return res.status(400).json({ error: "description or imageBase64 is required" });
   }
 
   const providerName = aiProvider ?? process.env.AI_PROVIDER ?? "openai";
@@ -89,7 +91,7 @@ aiRouter.post("/background", async (req, res) => {
     if (!provider.generateBackground) {
       return res.status(501).json({ error: `Provider "${providerName}" does not support background generation.` });
     }
-    const { data, ext } = await provider.generateBackground(description);
+    const { data, ext } = await provider.generateBackground(description ?? "", imageBase64, styleDescription);
     const filename = `bg_${uuid()}.${ext}`;
     writeFileSync(join(UPLOAD_DIR, filename), data);
     res.json({ backgroundUrl: `/uploads/${filename}` });

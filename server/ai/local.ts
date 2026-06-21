@@ -55,7 +55,7 @@ function pickColor(desc: string): [string, string] {
 
 // Per-pose geometry: body-center Y, head-center Y, arm endpoints, leg endpoints, smile path
 type Pose = { by: number; hy: number; al: number[]; ar: number[]; ll: number[]; lr: number[]; sm: string };
-const POSES: Record<keyof SpriteBuffers, Pose> = {
+const POSES: Record<Exclude<keyof SpriteBuffers, "collectible">, Pose> = {
   idle: {
     by: 128, hy: 72,
     al: [62, 122, 36, 148],  ar: [138, 122, 164, 148],
@@ -232,7 +232,7 @@ const provider: ServerAiProvider = {
           const resp = await client.images.generate({ model: imageModel, prompt, size: "1024x1024", n: 1 });
           const url  = resp.data?.[0]?.url;
           if (!url) throw new Error(`No image URL returned for pose: ${pose}`);
-          sprite = { data: Buffer.from(await fetch(url).then(r => r.arrayBuffer())), ext: "png" };
+          sprite = { data: Buffer.from(await fetch(url).then(async r => new Uint8Array(await r.arrayBuffer()))), ext: "png" };
         } else {
           sprite = svgSprite(characterDesc, pose);
         }
@@ -261,7 +261,7 @@ const provider: ServerAiProvider = {
           });
           const url = resp.data?.[0]?.url;
           if (url) {
-            return { data: Buffer.from(await fetch(url).then(r => r.arrayBuffer())), ext: "png" };
+            return { data: Buffer.from(await fetch(url).then(async r => new Uint8Array(await r.arrayBuffer()))), ext: "png" };
           }
         }
         return svgCollectible(characterDesc);
@@ -270,11 +270,38 @@ const provider: ServerAiProvider = {
 
     return { ...Object.fromEntries(poseEntries), collectible: collectibleSprite } as unknown as SpriteBuffers;
   },
-};
 
-  async generateBackground(description: string): Promise<SpriteFile> {
+  async generateBackground(description: string, imageBase64?: string, styleDescription?: string): Promise<SpriteFile> {
+    const baseURL    = process.env.LOCAL_BASE_URL   ?? "http://localhost:11434/v1";
+    const apiKey     = process.env.LOCAL_API_KEY    ?? "ollama";
+    const chatModel  = process.env.LOCAL_CHAT_MODEL ?? "gemma4:12b";
     const imageModel = process.env.LOCAL_IMAGE_MODEL ?? "";
     const useSD      = !!process.env.LOCAL_SD_URL;
+
+    let sceneDescription = description;
+
+    if (imageBase64) {
+      try {
+        const client = new OpenAI({ baseURL, apiKey });
+        const res = await client.chat.completions.create({
+          model: chatModel,
+          max_tokens: 100,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "text", text: `A child drew this and wants to use it as inspiration for a video game background. Describe the scene in 1-2 sentences — setting, mood, colors.${description ? ` The child described it as: "${description}".` : ""}` },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
+            ],
+          }],
+        });
+        sceneDescription = res.choices[0]?.message?.content ?? description;
+        console.log(`[local] Background vision analysis: ${sceneDescription.slice(0, 80)}…`);
+      } catch (err) {
+        console.warn("[local] Vision analysis for background failed:", (err as Error).message);
+      }
+    }
+
+    const styleClause = styleDescription ? `, art style matching: ${styleDescription}` : "";
 
     if (useSD) {
       const sdUrl = process.env.LOCAL_SD_URL!.replace(/\/$/, "");
@@ -282,7 +309,7 @@ const provider: ServerAiProvider = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: `landscape background for a children's video game, ${description}, simple 2d cartoon, colorful, no characters, no text`,
+          prompt: `landscape background for a children's video game, ${sceneDescription}${styleClause}, simple 2d cartoon, colorful, no characters, no text`,
           negative_prompt: "text, watermark, characters, people",
           width: 768, height: 512, steps: 20, cfg_scale: 7,
         }),
@@ -290,19 +317,17 @@ const provider: ServerAiProvider = {
       const json = await res.json() as { images?: string[] };
       if (json.images?.[0]) return { data: Buffer.from(json.images[0], "base64"), ext: "png" };
     } else if (imageModel) {
-      const baseURL = process.env.LOCAL_BASE_URL ?? "http://localhost:11434/v1";
-      const apiKey  = process.env.LOCAL_API_KEY  ?? "ollama";
-      const client  = new OpenAI({ baseURL, apiKey });
+      const client = new OpenAI({ baseURL, apiKey });
       const resp = await client.images.generate({
         model: imageModel,
-        prompt: `Wide landscape background for a children's video game. Scene: ${description}. Colorful, childlike art, no characters, no text.`,
+        prompt: `Wide landscape background for a children's video game. Scene: ${sceneDescription}${styleClause}. Colorful, childlike art, no characters, no text.`,
         size: "1024x1024", n: 1,
       });
       const url = resp.data?.[0]?.url;
-      if (url) return { data: Buffer.from(await fetch(url).then(r => r.arrayBuffer())), ext: "png" };
+      if (url) return { data: Buffer.from(await fetch(url).then(async r => new Uint8Array(await r.arrayBuffer()))), ext: "png" };
     }
 
-    return svgBackground(description);
+    return svgBackground(sceneDescription);
   },
 };
 

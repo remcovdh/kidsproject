@@ -5,9 +5,12 @@ const spriteConfig = JSON.parse(localStorage.getItem("kidsproject_sprites") ?? "
 const params = new URLSearchParams(location.search);
 
 const ASSETS = {
-  character:  spriteConfig.idle        ?? params.get("idle")        ?? "assets/character_idle.png",
-  falling:    spriteConfig.collectible ?? params.get("falling")     ?? "assets/collectible.png",
-  background: spriteConfig.background  ?? params.get("background")  ?? "assets/background.png",
+  character_idle:      spriteConfig.idle        ?? params.get("idle")        ?? "assets/character_idle.png",
+  character_move:      spriteConfig.move        ?? params.get("move")        ?? "assets/character_idle.png",
+  character_action:    spriteConfig.action      ?? params.get("action")      ?? "assets/character_idle.png",
+  character_celebrate: spriteConfig.celebrate   ?? params.get("celebrate")   ?? "assets/character_idle.png",
+  falling:             spriteConfig.collectible ?? params.get("falling")     ?? "assets/collectible.png",
+  background:          spriteConfig.background  ?? params.get("background")  ?? "assets/background.png",
 };
 
 const SOUND_IDS = {
@@ -28,15 +31,18 @@ const CATCHER_H   = 80;
 const CATCHER_SPD = 8;
 const FALL_SPEED  = 4;
 const SPAWN_EVERY = 90; // frames between new items
+const POSE_FRAMES = 45; // ~0.75s at 60fps for temporary pose
 
 const state = {
-  score:    0,
-  lives:    3,
-  gameOver: false,
-  catcher:  { x: W / 2 - CATCHER_W / 2, y: H - CATCHER_H - 20 },
-  fallers:  [],
-  frame:    0,
-  keys:     {},
+  score:     0,
+  lives:     3,
+  gameOver:  false,
+  catcher:   { x: W / 2 - CATCHER_W / 2, y: H - CATCHER_H - 20 },
+  fallers:   [],
+  frame:     0,
+  keys:      {},
+  pose:      "idle",   // "idle" | "move" | "action" | "celebrate"
+  poseTimer: 0,        // frames remaining for temporary pose
 };
 
 const images = {};
@@ -67,13 +73,15 @@ function showGameOver() {
 }
 
 function restartGame() {
-  state.score    = 0;
-  state.lives    = 3;
-  state.gameOver = false;
-  state.fallers  = [];
-  state.frame    = 0;
+  state.score     = 0;
+  state.lives     = 3;
+  state.gameOver  = false;
+  state.fallers   = [];
+  state.frame     = 0;
+  state.pose      = "idle";
+  state.poseTimer = 0;
   state.catcher.x = W / 2 - CATCHER_W / 2;
-  stopBtn.hidden  = false;
+  stopBtn.hidden   = false;
   replayBtn.hidden = true;
 }
 
@@ -81,6 +89,16 @@ function restartGame() {
 function update() {
   if (state.gameOver) return;
   state.frame++;
+
+  // Pose management: temporary poses (catch/miss) count down; movement pose while key held
+  if (state.poseTimer > 0) {
+    state.poseTimer--;
+    if (state.poseTimer === 0) state.pose = "idle";
+  } else if (state.keys["ArrowLeft"] || state.keys["ArrowRight"]) {
+    state.pose = "move";
+  } else {
+    state.pose = "idle";
+  }
 
   if (state.keys["ArrowLeft"])
     state.catcher.x = Math.max(0, state.catcher.x - CATCHER_SPD);
@@ -101,10 +119,14 @@ function update() {
     if (caught) {
       state.fallers.splice(i, 1);
       state.score++;
+      state.pose      = "celebrate";
+      state.poseTimer = POSE_FRAMES;
       playSound(SOUND_IDS.catch);
     } else if (f.y > H) {
       state.fallers.splice(i, 1);
       state.lives--;
+      state.pose      = "action";
+      state.poseTimer = POSE_FRAMES;
       playSound(SOUND_IDS.miss);
       if (state.lives <= 0) showGameOver();
     }
@@ -133,8 +155,10 @@ function drawFallers() {
 }
 
 function drawCatcher() {
-  if (images.character) {
-    ctx.drawImage(images.character, state.catcher.x, state.catcher.y, CATCHER_W, CATCHER_H);
+  // Use the pose-specific sprite; fall back to idle if the image didn't load
+  const img = images[`character_${state.pose}`] ?? images.character_idle;
+  if (img) {
+    ctx.drawImage(img, state.catcher.x, state.catcher.y, CATCHER_W, CATCHER_H);
   } else {
     ctx.fillStyle = "#4ECDC4";
     ctx.fillRect(state.catcher.x, state.catcher.y, CATCHER_W, CATCHER_H);
@@ -219,7 +243,10 @@ replayBtn.addEventListener("click", () => restartGame());
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 Promise.all([
-  loadImage("character",  ASSETS.character),
-  loadImage("falling",    ASSETS.falling),
-  loadImage("background", ASSETS.background),
+  loadImage("character_idle",      ASSETS.character_idle),
+  loadImage("character_move",      ASSETS.character_move),
+  loadImage("character_action",    ASSETS.character_action),
+  loadImage("character_celebrate", ASSETS.character_celebrate),
+  loadImage("falling",             ASSETS.falling),
+  loadImage("background",          ASSETS.background),
 ]).then(loop);

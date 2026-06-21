@@ -205,6 +205,8 @@ export async function fetchGallery(sessionId: string): Promise<GalleryItem[]> {
 export async function generateBackground(
   description: string,
   aiProvider: string,
+  imageBase64?: string,
+  styleDescription?: string,
 ): Promise<{ backgroundUrl: string }> {
   if (MOCK_MODE) {
     await sleep(1500);
@@ -213,11 +215,11 @@ export async function generateBackground(
   return apiFetch<{ backgroundUrl: string }>(`${API}/api/ai/background`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ description, aiProvider }),
+    body: JSON.stringify({ description, aiProvider, imageBase64, styleDescription }),
   });
 }
 
-function fileToBase64(file: File): Promise<string> {
+export function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload  = () => resolve((reader.result as string).split(",")[1]);

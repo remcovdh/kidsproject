@@ -1,5 +1,5 @@
 import type { SessionState, Step } from "../main.js";
-import { uploadDrawing, generateBackground } from "../api.js";
+import { uploadDrawing, generateBackground, fileToBase64 } from "../api.js";
 
 const BG_CHIPS = [
   { v: "a sunny meadow with flowers and butterflies", l: "Meadow",     e: "🌸" },
@@ -127,11 +127,14 @@ export function renderUploadBackground(
       });
 
     } else {
-      // AI generation mode
+      // AI generation mode — supports text prompt, optional inspiration photo, and style alignment
+      const d = state.characterDescription;
+      const charStyleText = d ? `a ${d.feeling} ${d.what} that moves in a ${d.movement} way` : "";
+
       container.innerHTML = `
         <div class="step step--describe">
           <h1 class="step__title">What world do you want? ✨</h1>
-          <p class="step__subtitle">Pick one or write your own!</p>
+          <p class="step__subtitle">Pick one or describe your own!</p>
 
           <div class="chip-group" id="bg-chips">
             ${BG_CHIPS.map(c => `
@@ -143,6 +146,30 @@ export function renderUploadBackground(
               placeholder="or describe your own world..." maxlength="80"
               value="${selectedBgDesc && !BG_CHIPS.find(c => c.v === selectedBgDesc) ? selectedBgDesc : ""}" />
           </div>
+
+          <div class="inspiration-section">
+            <button class="btn btn--ghost btn--small" id="inspiration-toggle">
+              📸 Add a photo as inspiration (optional)
+            </button>
+            <div id="inspiration-body" hidden style="margin-top:.75rem">
+              <label class="upload-area upload-area--small" id="inspiration-upload-area">
+                <div class="upload-area__icon" style="font-size:1.6rem">🖼️</div>
+                <p class="upload-area__text" style="font-size:.9rem">Tap to add a photo</p>
+                <input type="file" id="inspiration-input" accept="image/*" capture="environment" hidden />
+              </label>
+              <div id="inspiration-preview" hidden style="display:flex;align-items:center;gap:.75rem;margin-top:.5rem">
+                <img id="inspiration-img" src="" alt="Inspiration"
+                  style="height:72px;border-radius:var(--radius);object-fit:cover" />
+                <button class="btn btn--ghost btn--small" id="remove-inspiration-btn">Remove ✕</button>
+              </div>
+            </div>
+          </div>
+
+          ${charStyleText ? `
+          <label class="checkbox-row" style="margin-top:.75rem">
+            <input type="checkbox" id="style-match-cb" />
+            <span>Match my character's style ✨</span>
+          </label>` : ""}
 
           <div class="drawing-preview" id="bg-result" hidden>
             <img id="bg-result-img" src="" alt="Generated background" style="max-width:100%;border-radius:var(--radius)" />
@@ -162,19 +189,30 @@ export function renderUploadBackground(
         </div>
       `;
 
-      const generateBtn  = container.querySelector<HTMLButtonElement>("#generate-btn")!;
-      const useBtn       = container.querySelector<HTMLButtonElement>("#use-btn")!;
-      const resultBox    = container.querySelector<HTMLElement>("#bg-result")!;
-      const resultImg    = container.querySelector<HTMLImageElement>("#bg-result-img")!;
-      const errorBox     = container.querySelector<HTMLElement>("#error-box")!;
-      const errorDetail  = container.querySelector<HTMLElement>("#error-detail")!;
-      const customInput  = container.querySelector<HTMLInputElement>("#bg-custom")!;
-      let generatedUrl   = "";
+      const generateBtn        = container.querySelector<HTMLButtonElement>("#generate-btn")!;
+      const useBtn             = container.querySelector<HTMLButtonElement>("#use-btn")!;
+      const resultBox          = container.querySelector<HTMLElement>("#bg-result")!;
+      const resultImg          = container.querySelector<HTMLImageElement>("#bg-result-img")!;
+      const errorBox           = container.querySelector<HTMLElement>("#error-box")!;
+      const errorDetail        = container.querySelector<HTMLElement>("#error-detail")!;
+      const customInput        = container.querySelector<HTMLInputElement>("#bg-custom")!;
+      const inspirationToggle  = container.querySelector<HTMLButtonElement>("#inspiration-toggle")!;
+      const inspirationBody    = container.querySelector<HTMLElement>("#inspiration-body")!;
+      const inspirationArea    = container.querySelector<HTMLElement>("#inspiration-upload-area")!;
+      const inspirationInput   = container.querySelector<HTMLInputElement>("#inspiration-input")!;
+      const inspirationPreview = container.querySelector<HTMLElement>("#inspiration-preview")!;
+      const inspirationImg     = container.querySelector<HTMLImageElement>("#inspiration-img")!;
+      const removeInspirationBtn = container.querySelector<HTMLButtonElement>("#remove-inspiration-btn");
+      const styleMatchCb       = container.querySelector<HTMLInputElement>("#style-match-cb");
+
+      let inspirationFile: File | null = null;
+      let generatedUrl = "";
 
       function updateGenerateBtn() {
-        generateBtn.disabled = !selectedBgDesc.trim();
+        generateBtn.disabled = !selectedBgDesc.trim() && !inspirationFile;
       }
 
+      // Chip selection
       container.querySelectorAll<HTMLButtonElement>(".chip").forEach((chip) => {
         chip.addEventListener("click", () => {
           container.querySelectorAll(".chip").forEach(c => c.classList.remove("chip--active"));
@@ -193,17 +231,47 @@ export function renderUploadBackground(
 
       if (selectedBgDesc) updateGenerateBtn();
 
+      // Inspiration photo toggle
+      inspirationToggle.addEventListener("click", () => {
+        const expanded = !inspirationBody.hidden;
+        inspirationBody.hidden = expanded;
+        inspirationToggle.textContent = expanded
+          ? "📸 Add a photo as inspiration (optional)"
+          : "📸 Hide inspiration photo ▲";
+      });
+
+      inspirationArea.addEventListener("click", () => inspirationInput.click());
+
+      inspirationInput.addEventListener("change", () => {
+        const file = inspirationInput.files?.[0];
+        if (!file) return;
+        inspirationFile = file;
+        inspirationImg.src = URL.createObjectURL(file);
+        inspirationArea.hidden = true;
+        inspirationPreview.hidden = false;
+        updateGenerateBtn();
+      });
+
+      removeInspirationBtn?.addEventListener("click", () => {
+        inspirationFile = null;
+        inspirationInput.value = "";
+        inspirationArea.hidden = false;
+        inspirationPreview.hidden = true;
+        updateGenerateBtn();
+      });
+
+      // Navigation
       container.querySelector("#back-btn")?.addEventListener("click", () => { mode = "choose"; draw(); });
 
       container.querySelector("#retry-bg-btn")?.addEventListener("click", () => {
         resultBox.hidden = true;
         useBtn.hidden = true;
         generateBtn.hidden = false;
-        generateBtn.disabled = !selectedBgDesc.trim();
+        generateBtn.disabled = !selectedBgDesc.trim() && !inspirationFile;
       });
 
+      // Generate
       generateBtn.addEventListener("click", async () => {
-        if (!selectedBgDesc.trim()) return;
         generateBtn.disabled = true;
         generateBtn.textContent = "Painting... ✨ (this takes ~15 seconds)";
         errorBox.hidden = true;
@@ -211,14 +279,13 @@ export function renderUploadBackground(
 
         try {
           const aiProvider = state.sessionConfig?.aiProvider ?? "openai";
-          const { backgroundUrl } = await generateBackground(selectedBgDesc, aiProvider);
+          const imageBase64 = inspirationFile ? await fileToBase64(inspirationFile) : undefined;
+          const styleDescription = styleMatchCb?.checked ? charStyleText : undefined;
+          const { backgroundUrl } = await generateBackground(selectedBgDesc, aiProvider, imageBase64, styleDescription);
           generatedUrl = backgroundUrl;
           if (backgroundUrl) {
             resultImg.src = backgroundUrl;
             resultBox.hidden = false;
-          } else {
-            // mock mode — no real image
-            resultBox.hidden = true;
           }
           generateBtn.hidden = true;
           useBtn.hidden = false;

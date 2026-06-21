@@ -1,5 +1,5 @@
 import type { SessionState, Step } from "../main.js";
-import { generateSprites, type SpriteVersion } from "../api.js";
+import { generateSprites, uploadDrawing, type SpriteVersion } from "../api.js";
 
 function description(state: SessionState): string {
   const d = state.characterDescription ?? { what: "character", feeling: "happy", movement: "bouncy" };
@@ -19,15 +19,20 @@ function spritePoses(v: SpriteVersion): string {
     ["move",        "Moving"],
     ["action",      "Action!"],
     ["celebrate",   "Celebrating"],
-    ["collectible", "Falling item ⭐"],
   ];
-  return `<div class="sprite-grid">
-    ${poses.map(([key, label]) => `
-      <div class="sprite-tile">
-        <img src="${v.sprites[key]}" alt="${label}" />
-        <span>${label}</span>
-      </div>`).join("")}
-  </div>`;
+  const characterTiles = poses.map(([key, label]) => `
+    <div class="sprite-tile">
+      <img src="${v.sprites[key]}" alt="${label}" />
+      <span>${label}</span>
+    </div>`).join("");
+  const collectibleTile = `
+    <div class="sprite-tile sprite-tile--collectible">
+      <img id="collectible-img" src="${v.sprites.collectible}" alt="Falling item ⭐" />
+      <span>Falling item ⭐</span>
+      <button class="btn btn--ghost btn--small" id="draw-collectible-btn">Draw your own ✏️</button>
+      <input type="file" id="collectible-input" accept="image/*" capture="environment" hidden />
+    </div>`;
+  return `<div class="sprite-grid">${characterTiles}${collectibleTile}</div>`;
 }
 
 function history(versions: SpriteVersion[], onPick: (v: SpriteVersion) => void): HTMLElement {
@@ -92,6 +97,32 @@ export function renderGenerateSprites(
           goToStep("preview-game", { spriteVersions: versions, activeSpriteVersionId: v.id });
         })
       );
+
+      // "Draw your own" button on the collectible tile
+      const drawCollectibleBtn = container.querySelector<HTMLButtonElement>("#draw-collectible-btn")!;
+      const collectibleInput   = container.querySelector<HTMLInputElement>("#collectible-input")!;
+      const collectibleImg     = container.querySelector<HTMLImageElement>("#collectible-img")!;
+
+      drawCollectibleBtn.addEventListener("click", () => collectibleInput.click());
+
+      collectibleInput.addEventListener("change", async () => {
+        const file = collectibleInput.files?.[0];
+        if (!file) return;
+        drawCollectibleBtn.disabled = true;
+        drawCollectibleBtn.textContent = "Uploading... ⏳";
+        try {
+          const { drawingUrl } = await uploadDrawing(file);
+          version.sprites.collectible = drawingUrl;
+          collectibleImg.src = drawingUrl;
+          saveToLocalStorage(version.sprites, state.backgroundUrl);
+          drawCollectibleBtn.textContent = "✅ Changed!";
+          drawCollectibleBtn.disabled = false;
+        } catch (err) {
+          console.error("[generate-sprites collectible]", err);
+          drawCollectibleBtn.textContent = "Draw your own ✏️";
+          drawCollectibleBtn.disabled = false;
+        }
+      });
 
       container.querySelector("#play-btn")?.addEventListener("click", () => {
         saveToLocalStorage(version.sprites, state.backgroundUrl);

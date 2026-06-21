@@ -85,12 +85,44 @@ const provider: ServerAiProvider = {
     } as unknown as SpriteBuffers;
   },
 
-  async generateBackground(description: string): Promise<SpriteFile> {
+  async generateBackground(description: string, imageBase64?: string, styleDescription?: string): Promise<SpriteFile> {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    let sceneDescription = description;
+
+    if (imageBase64) {
+      try {
+        const analysis = await client.chat.completions.create({
+          model: "gpt-4o",
+          max_tokens: 120,
+          messages: [{
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `A child drew this and wants to use it as inspiration for a video game background. Describe the scene in 1-2 sentences for an illustrator — focus on setting, mood, and colors.${description ? ` The child also described it as: "${description}".` : ""}`,
+              },
+              {
+                type: "image_url",
+                image_url: { url: `data:image/jpeg;base64,${imageBase64}`, detail: "low" },
+              },
+            ],
+          }],
+        });
+        sceneDescription = analysis.choices[0]?.message?.content ?? description;
+      } catch (err) {
+        console.warn("GPT-4o Vision analysis for background failed:", err);
+      }
+    }
+
+    const styleClause = styleDescription
+      ? ` Art style should match this character: ${styleDescription}.`
+      : "";
+
     const response = await client.images.generate({
       model: "gpt-image-1",
       prompt:
-        `A wide landscape background for a children's video game. Scene: ${description}. ` +
+        `A wide landscape background for a children's video game. Scene: ${sceneDescription}.${styleClause} ` +
         `Colorful, cheerful, childlike art style. No characters, no text, just the scenery. ` +
         `Flat 2D illustration style, vibrant colors, bold shapes.`,
       size: "1536x1024",

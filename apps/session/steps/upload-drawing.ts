@@ -61,7 +61,7 @@ export function renderUploadDrawing(
     nextBtn.textContent = "Uploading... ⏳";
     try {
       const result = await uploadDrawing(selectedFile);
-      goToStep("describe-character", { drawingUrl: result.drawingUrl, drawingBase64: result.drawingBase64 });
+      goToStep("upload-background", { drawingUrl: result.drawingUrl, drawingBase64: result.drawingBase64 });
     } catch {
       nextBtn.disabled = false;
       nextBtn.textContent = "That's my drawing! →";

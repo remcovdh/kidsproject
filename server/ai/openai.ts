@@ -8,12 +8,6 @@ const POSES: Record<keyof SpriteBuffers, string> = {
   celebrate: "cheering with arms raised, happy celebration pose",
 };
 
-async function downloadBuffer(url: string): Promise<Buffer> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to download image: ${res.status}`);
-  return Buffer.from(await res.arrayBuffer());
-}
-
 const provider: ServerAiProvider = {
   async generateSprites(description: string, drawingBase64: string): Promise<SpriteBuffers> {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -45,23 +39,23 @@ const provider: ServerAiProvider = {
       }
     }
 
-    // Generate all 4 poses in parallel to keep wait time short
+    // Generate all 4 poses in parallel with gpt-image-1 (returns base64 directly)
     const entries = await Promise.all(
       (Object.entries(POSES) as [keyof SpriteBuffers, string][]).map(
         async ([pose, posePrompt]) => {
           const response = await client.images.generate({
-            model: "dall-e-3",
+            model: "gpt-image-1",
             prompt:
               `Simple 2D video game character sprite. ${characterDesc}. ` +
               `Pose: ${posePrompt}. ` +
               `Childlike art style, bold outlines, bright colors, white background, centered, no text, square crop.`,
             size: "1024x1024",
-            quality: "standard",
+            quality: "medium",
             n: 1,
           });
-          const url = response.data?.[0]?.url;
-          if (!url) throw new Error(`No image URL returned for pose: ${pose}`);
-          return [pose, { data: await downloadBuffer(url), ext: "png" }] as const;
+          const b64 = response.data?.[0]?.b64_json;
+          if (!b64) throw new Error(`No image data returned for pose: ${pose}`);
+          return [pose, { data: Buffer.from(b64, "base64"), ext: "png" }] as const;
         }
       )
     );

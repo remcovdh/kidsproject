@@ -1,5 +1,6 @@
-// All server calls live here. Flip MOCK_MODE to false when the server is ready.
-const MOCK_MODE = true;
+// VITE_MOCK=false in .env switches to the real server.
+// Default is true so `npm run dev` works without any setup.
+const MOCK_MODE = import.meta.env["VITE_MOCK"] !== "false";
 const API = "";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));

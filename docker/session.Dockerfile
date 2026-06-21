@@ -10,6 +10,8 @@ RUN npm ci --workspace=@kidsproject/session --include-workspace-root
 
 COPY apps/session/ ./apps/session/
 
+# Always build with real-mode on — mock mode is for local npm dev only
+ENV VITE_MOCK=false
 RUN npm run build -w @kidsproject/session
 
 # ── Stage 2: serve with nginx ─────────────────────────────────────────────────

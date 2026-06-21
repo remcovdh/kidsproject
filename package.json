@@ -7,8 +7,8 @@
     "server"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w apps/session\" \"npm run dev -w apps/admin\"",
-    "build": "npm run build -w packages/ai && npm run build -w packages/shared && npm run build -w apps/session && npm run build -w apps/admin",
+    "dev": "concurrently --names server,session \"npm run dev -w @kidsproject/server\" \"npm run dev -w @kidsproject/session\"",
+    "build": "npm run build -w @kidsproject/session",
     "typecheck": "tsc --build"
   },
   "devDependencies": {

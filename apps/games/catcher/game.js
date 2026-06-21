@@ -29,9 +29,18 @@ const H = canvas.height;
 const CATCHER_W   = 80;
 const CATCHER_H   = 80;
 const CATCHER_SPD = 8;
-const FALL_SPEED  = 4;
-const SPAWN_EVERY = 90; // frames between new items
 const POSE_FRAMES = 45; // ~0.75s at 60fps for temporary pose
+
+// Difficulty ramps every FRAMES_PER_LEVEL frames (~10 s at 60 fps).
+// Fall speed goes 4 → 5 → 6 … capped at 14.
+// Spawn interval goes 90 → 78 → 66 … capped at 36 (one item ~every 0.6 s).
+const FRAMES_PER_LEVEL = 600;
+const BASE_SPEED  = 4;
+const BASE_SPAWN  = 90;
+
+function getLevel(frame)      { return Math.floor(frame / FRAMES_PER_LEVEL); }
+function getFallSpeed(frame)  { return Math.min(BASE_SPEED + getLevel(frame),       14); }
+function getSpawnEvery(frame) { return Math.max(BASE_SPAWN - getLevel(frame) * 12,  36); }
 
 const state = {
   score:     0,
@@ -105,11 +114,12 @@ function update() {
   if (state.keys["ArrowRight"])
     state.catcher.x = Math.min(W - CATCHER_W, state.catcher.x + CATCHER_SPD);
 
-  if (state.frame % SPAWN_EVERY === 0) spawnFaller();
+  if (state.frame % getSpawnEvery(state.frame) === 0) spawnFaller();
 
+  const fallSpeed = getFallSpeed(state.frame);
   for (let i = state.fallers.length - 1; i >= 0; i--) {
     const f = state.fallers[i];
-    f.y += FALL_SPEED;
+    f.y += fallSpeed;
 
     const caught =
       f.y + f.size >= state.catcher.y &&
@@ -179,9 +189,14 @@ function drawHUD() {
     ctx.fillText("♥", 14 + i * 30, 32);
   }
 
-  // Score
+  // Level
+  const level = getLevel(state.frame);
   ctx.fillStyle = "white";
   ctx.font = "bold 20px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(`Level ${level + 1}`, W / 2, 32);
+
+  // Score
   ctx.textAlign = "right";
   ctx.fillText(`Score: ${state.score}`, W - 14, 32);
   ctx.textAlign = "left";

@@ -8,7 +8,7 @@ Every child walks away understanding three things about AI:
 
 1. **You are the director** — AI does what you describe, not what you imagine. Words matter.
 2. **AI makes mistakes** — that's okay. You can describe it differently and try again.
-3. **AI learned from humans** — it's a very good guesser, not something that thinks or feels.
+3. **AI learned from humans** — it's a very good guesser.
 
 These ideas are woven into the flow of the app rather than taught as a lesson. The child experiences them directly.
 

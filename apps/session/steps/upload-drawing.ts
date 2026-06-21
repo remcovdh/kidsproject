@@ -68,7 +68,7 @@ export function renderUploadDrawing(
     errorBox.hidden = true;
     try {
       const result = await uploadDrawing(selectedFile);
-      goToStep("upload-background", { drawingUrl: result.drawingUrl, drawingBase64: result.drawingBase64 });
+      goToStep("describe-character", { drawingUrl: result.drawingUrl, drawingBase64: result.drawingBase64 });
     } catch (err) {
       console.error("[upload-drawing]", err);
       nextBtn.disabled = false;

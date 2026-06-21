@@ -1,6 +1,7 @@
 import type { SessionState, Step } from "../main.js";
 import { uploadDrawing } from "../api.js";
 
+
 export function renderUploadBackground(
   container: HTMLElement,
   state: SessionState,
@@ -27,6 +28,10 @@ export function renderUploadBackground(
         <button class="btn btn--ghost" id="skip-btn">Skip — no background →</button>
         <button class="btn btn--primary btn--big" id="next-btn" disabled>Use this background! →</button>
       </div>
+      <div class="error-box" id="error-box" hidden>
+        <p class="error-box__child">Something went wrong with the upload. Ask your teacher for help! 🙋</p>
+        <p class="error-box__detail" id="error-detail"></p>
+      </div>
     </div>
   `;
 
@@ -35,8 +40,10 @@ export function renderUploadBackground(
   const preview    = container.querySelector<HTMLElement>("#bg-preview")!;
   const bgImg      = container.querySelector<HTMLImageElement>("#bg-img")!;
   const retakeBtn  = container.querySelector<HTMLButtonElement>("#retake-btn")!;
-  const nextBtn    = container.querySelector<HTMLButtonElement>("#next-btn")!;
-  const skipBtn    = container.querySelector<HTMLButtonElement>("#skip-btn")!;
+  const nextBtn     = container.querySelector<HTMLButtonElement>("#next-btn")!;
+  const skipBtn     = container.querySelector<HTMLButtonElement>("#skip-btn")!;
+  const errorBox    = container.querySelector<HTMLElement>("#error-box")!;
+  const errorDetail = container.querySelector<HTMLElement>("#error-detail")!;
   let selectedFile: File | null = null;
 
   uploadArea.addEventListener("click", () => fileInput.click());
@@ -60,19 +67,23 @@ export function renderUploadBackground(
   });
 
   skipBtn.addEventListener("click", () => {
-    goToStep("describe-character", { backgroundUrl: null });
+    goToStep("customize", { backgroundUrl: null });
   });
 
   nextBtn.addEventListener("click", async () => {
     if (!selectedFile) return;
     nextBtn.disabled = true;
     nextBtn.textContent = "Uploading... ⏳";
+    errorBox.hidden = true;
     try {
       const result = await uploadDrawing(selectedFile);
-      goToStep("describe-character", { backgroundUrl: result.drawingUrl });
-    } catch {
+      goToStep("customize", { backgroundUrl: result.drawingUrl });
+    } catch (err) {
+      console.error("[upload-background]", err);
       nextBtn.disabled = false;
       nextBtn.textContent = "Use this background! →";
+      errorDetail.textContent = err instanceof Error ? err.message : String(err);
+      errorBox.hidden = false;
     }
   });
 }

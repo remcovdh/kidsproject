@@ -1,9 +1,4 @@
-import dotenv from "dotenv";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
-
-// Load .env from project root before any module reads process.env
-dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), "../.env") });
+import "./env.js"; // Must be first — loads .env before any other module reads process.env
 
 import express from "express";
 import cors from "cors";

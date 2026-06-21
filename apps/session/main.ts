@@ -39,8 +39,8 @@ export interface SessionState {
 }
 
 const PROGRESS_STEPS: Step[] = [
-  "pick-game", "upload-drawing", "upload-background",
-  "describe-character", "generate-sprites", "preview-game",
+  "pick-game", "upload-drawing", "describe-character",
+  "generate-sprites", "preview-game", "upload-background",
   "customize", "publish",
 ];
 

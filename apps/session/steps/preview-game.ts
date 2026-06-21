@@ -14,7 +14,7 @@ export function renderPreviewGame(
       </div>
       <div class="step__actions">
         <button class="btn btn--ghost" id="back-btn">← Change character</button>
-        <button class="btn btn--primary" id="next-btn">I love it! →</button>
+        <button class="btn btn--primary" id="next-btn">I love it! Add a background →</button>
       </div>
     </div>
   `;
@@ -26,6 +26,6 @@ export function renderPreviewGame(
     goToStep("generate-sprites");
   });
   container.querySelector("#next-btn")?.addEventListener("click", () => {
-    goToStep("customize");
+    goToStep("upload-background");
   });
 }

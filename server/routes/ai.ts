@@ -30,6 +30,12 @@ aiRouter.post("/sprites", async (req, res) => {
 
   if (!row) return res.status(404).json({ error: "Child not found" });
 
+  if (row.ai_provider === "openai" && !process.env.OPENAI_API_KEY) {
+    return res.status(500).json({
+      error: "OPENAI_API_KEY is not set on the server. Add it to your .env file and restart.",
+    });
+  }
+
   try {
     const provider  = await getServerProvider(row.ai_provider);
     const buffers   = await provider.generateSprites(description, drawingBase64);

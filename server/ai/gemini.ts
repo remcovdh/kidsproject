@@ -7,7 +7,7 @@ const provider: ServerAiProvider = {
   async generateSprites(_description: string, _drawingBase64: string) {
     throw new Error(
       "Gemini sprite generation is not yet implemented. " +
-      "Set ai_provider='openai' on your session or set OPENAI_API_KEY."
+      "Set ai_provider='openai' or 'local' on your session."
     );
   },
 };

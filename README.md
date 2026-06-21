@@ -64,7 +64,29 @@ npm run dev
 - Session app: `http://localhost:3000`
 - API server:  `http://localhost:3002`
 
-The client runs in **mock mode** by default — all AI responses are fake SVG placeholders and there are no real API calls. To switch to the real server, flip `MOCK_MODE = false` in `apps/session/api.ts` and provide an `OPENAI_API_KEY` in a `.env` file at the project root.
+The client runs in **mock mode** by default — all AI responses are instant SVG placeholders and there are no real API calls. To connect to the real server, flip `MOCK_MODE = false` in `apps/session/api.ts`. You can then use either OpenAI or a local model (see below).
+
+### Development with a local model — realistic AI, no API key
+
+Run a local model with [Ollama](https://ollama.com) and the server talks to it instead of OpenAI. Vision analysis is real; image generation falls back to SVG sprites unless you also run Stable Diffusion.
+
+```bash
+# 1. Install Ollama and pull a vision model (one-time)
+ollama pull llama3.2-vision
+
+# 2. Copy the local-ai template
+cp .env.local-ai .env
+#    change LOCAL_BASE_URL to http://localhost:11434/v1 (native Ollama)
+
+# 3. Start the app
+npm run dev
+```
+
+Then flip `MOCK_MODE = false` in `apps/session/api.ts`. When a child uploads a drawing, Ollama analyses it and describes the character; the generated sprites are distinctive SVG illustrations colour-coded by character type (dragon → red, robot → blue, etc.).
+
+**Adding real image generation** — run [Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui) with `--api`, then add `LOCAL_SD_URL=http://localhost:7860` to `.env`. The server will use Stable Diffusion instead of SVG sprites.
+
+**Other local-model servers** — llama.cpp server, LM Studio, and cloud alternatives like Together.ai or Groq all expose an OpenAI-compatible API. Point `LOCAL_BASE_URL` at any of them. For image generation on Together.ai, also set `LOCAL_IMAGE_MODEL=black-forest-labs/FLUX.1-schnell`.
 
 ### Acceptance — Docker on your laptop, real OpenAI key
 
@@ -79,6 +101,16 @@ docker compose up --build -d
 # 3. Open in a browser
 open http://localhost:3000
 ```
+
+**Acceptance with a local model** — no OpenAI key needed, Ollama runs in Docker:
+
+```bash
+cp .env.local-ai .env
+docker compose --profile local-ai up --build -d
+docker compose exec ollama ollama pull llama3.2-vision
+```
+
+`LOCAL_BASE_URL` in `.env.local-ai` already points to `http://ollama:11434/v1` (the Docker service name), so no further changes are needed.
 
 To update after a `git pull`:
 
@@ -106,15 +138,36 @@ Use the same `docker-compose.yml`. Create a `.env` file on the server with your 
 
 ## Environment variables
 
-Copy `.env.example` for a full reference. The only required variable for real use is `OPENAI_API_KEY`.
+See `.env.example` for a full reference with comments. Templates:
+
+| File | Use for |
+|---|---|
+| `.env.acceptance` | Docker on laptop with OpenAI key |
+| `.env.local-ai` | Local model (Ollama / llama.cpp / any OAI-compatible) |
+
+Key variables:
 
 | Variable | Default | Description |
 |---|---|---|
-| `OPENAI_API_KEY` | — | Required for real sprite generation |
-| `SESSION_PORT` | `3000` | Host port for the session app (Docker only) |
+| `AI_PROVIDER` | `openai` | `openai` \| `local` \| `gemini` — also updates the demo session on startup |
+| `OPENAI_API_KEY` | — | Required when `AI_PROVIDER=openai` |
+| `LOCAL_BASE_URL` | `http://localhost:11434/v1` | Chat/vision endpoint (Ollama, llama.cpp, LM Studio, …) |
+| `LOCAL_API_KEY` | `ollama` | API key for the local endpoint (often a dummy value) |
+| `LOCAL_CHAT_MODEL` | `llama3.2-vision` | Vision-capable model to use |
+| `LOCAL_IMAGE_MODEL` | — | If set, use this model for image generation via the same endpoint |
+| `LOCAL_SD_URL` | — | If set, use Automatic1111-compatible API for image generation |
+| `SESSION_PORT` | `3000` | Host port for the session app container |
 | `PORT` | `3002` | API server port |
-| `DB_PATH` | `./data/kidsproject.db` | SQLite database file location |
+| `DB_PATH` | `./data/kidsproject.db` | SQLite database file |
 | `UPLOAD_DIR` | `./uploads` | Where drawings and generated sprites are stored |
+
+## AI providers
+
+| Provider | Set `AI_PROVIDER=` | Vision | Image generation |
+|---|---|---|---|
+| OpenAI | `openai` | GPT-4o | DALL-E 3 |
+| Local (Ollama, llama.cpp, …) | `local` | any vision model | SVG sprites, or SD via `LOCAL_SD_URL`, or OAI-compatible via `LOCAL_IMAGE_MODEL` |
+| Gemini | `gemini` | — | not yet implemented |
 
 ## Tech stack
 
@@ -124,8 +177,7 @@ Copy `.env.example` for a full reference. The only required variable for real us
 | Backend | Node.js + Express |
 | Database | SQLite via `better-sqlite3` |
 | File storage | Local disk (Docker volume) — S3 swap is on the roadmap |
-| AI — sprite analysis | OpenAI GPT-4o Vision |
-| AI — sprite generation | OpenAI DALL-E 3 (4 poses generated in parallel) |
+| AI provider | Pluggable — OpenAI, local (Ollama / llama.cpp / any OAI-compatible), Gemini stub |
 | Container serving | nginx:alpine |
 
 ## API overview

@@ -39,9 +39,9 @@ aiRouter.post("/sprites", async (req, res) => {
     mkdirSync(spriteDir, { recursive: true });
 
     const sprites: Record<string, string> = {};
-    for (const [pose, buf] of Object.entries(buffers)) {
-      const filename = `${pose}.png`;
-      writeFileSync(join(spriteDir, filename), buf);
+    for (const [pose, { data, ext }] of Object.entries(buffers)) {
+      const filename = `${pose}.${ext}`;
+      writeFileSync(join(spriteDir, filename), data);
       sprites[pose] = `/uploads/sprites/${versionId}/${filename}`;
     }
 

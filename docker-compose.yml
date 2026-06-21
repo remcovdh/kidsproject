@@ -33,6 +33,29 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ── Optional: Ollama for local AI (no OpenAI key needed) ─────────────────────
+  # Enable with:  docker compose --profile local-ai up --build -d
+  #
+  # Pull the vision model once after first start:
+  #   docker compose exec ollama ollama pull llama3.2-vision
+  #
+  # Set in .env:
+  #   AI_PROVIDER=local
+  #   LOCAL_BASE_URL=http://ollama:11434/v1
+  #   LOCAL_CHAT_MODEL=llama3.2-vision
+  #
+  # For real image generation also add:
+  #   LOCAL_SD_URL=http://host.docker.internal:7860  (if A1111 runs on host)
+  ollama:
+    image: ollama/ollama
+    profiles: ["local-ai"]
+    ports:
+      - "11434:11434"       # also reachable from the host at localhost:11434
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
 volumes:
   uploads:
   db_data:
+  ollama_data:

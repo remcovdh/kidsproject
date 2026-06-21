@@ -52,13 +52,18 @@ db.exec(`
   );
 `);
 
-// Seed a demo session on first run
+// Seed a demo session on first run.
+// AI_PROVIDER env var sets (and on every restart updates) the demo session's provider,
+// so switching from openai → local is just a matter of changing the env var.
+const aiProvider = process.env.AI_PROVIDER ?? "openai";
 const { n } = db.prepare("SELECT COUNT(*) as n FROM sessions").get() as { n: number };
 if (n === 0) {
   db.prepare(
     "INSERT INTO sessions (id, name, show_prompt, ai_provider) VALUES (?, ?, ?, ?)"
-  ).run("demo", "Dragon Workshop 🐉", 1, "openai");
-  console.log("  → seeded demo session (id: demo)");
+  ).run("demo", "Dragon Workshop 🐉", 1, aiProvider);
+  console.log(`  → seeded demo session (id: demo, provider: ${aiProvider})`);
+} else if (process.env.AI_PROVIDER) {
+  db.prepare("UPDATE sessions SET ai_provider = ? WHERE id = 'demo'").run(aiProvider);
 }
 
 export default db;

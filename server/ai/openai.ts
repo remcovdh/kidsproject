@@ -61,7 +61,7 @@ const provider: ServerAiProvider = {
           });
           const url = response.data?.[0]?.url;
           if (!url) throw new Error(`No image URL returned for pose: ${pose}`);
-          return [pose, await downloadBuffer(url)] as const;
+          return [pose, { data: await downloadBuffer(url), ext: "png" }] as const;
         }
       )
     );

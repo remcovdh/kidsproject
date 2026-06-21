@@ -66,9 +66,31 @@ function loadImage(key, src) {
   });
 }
 
-function playSound(id) {
-  try { new Audio(`assets/sounds/${id}.mp3`).play(); } catch { /* autoplay blocked */ }
+const soundCache = {};
+function getAudio(id) {
+  if (!soundCache[id]) soundCache[id] = new Audio(`assets/sounds/${id}.mp3`);
+  return soundCache[id];
 }
+
+function playSound(id) {
+  const audio = getAudio(id);
+  try { audio.currentTime = 0; } catch { /* not loaded yet, fine */ }
+  audio.play().catch(() => { /* blocked until the player interacts once, see unlockAudio() */ });
+}
+
+// Most browsers block Audio.play() until the page has seen a real user
+// gesture. requestAnimationFrame-driven playSound() calls don't count as
+// one, so "warm up" playback once on the first keypress/tap.
+function unlockAudio() {
+  [SOUND_IDS.catch, SOUND_IDS.miss].forEach((id) => {
+    const audio = getAudio(id);
+    audio.play().then(() => audio.pause()).catch(() => {});
+  });
+  document.removeEventListener("keydown", unlockAudio);
+  document.removeEventListener("pointerdown", unlockAudio);
+}
+document.addEventListener("keydown", unlockAudio, { once: true });
+document.addEventListener("pointerdown", unlockAudio, { once: true });
 
 // ── Game state ────────────────────────────────────────────────────────────────
 function spawnFaller() {

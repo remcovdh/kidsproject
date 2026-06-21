@@ -64,27 +64,31 @@ npm run dev
 - Session app: `http://localhost:3000`
 - API server:  `http://localhost:3002`
 
-The client runs in **mock mode** by default — all AI responses are instant SVG placeholders and there are no real API calls. To connect to the real server, flip `MOCK_MODE = false` in `apps/session/api.ts`. You can then use either OpenAI or a local model (see below).
+The client runs in **mock mode** by default — all AI responses are instant SVG placeholders and there are no real API calls. To connect to the real server, add `VITE_MOCK=false` to your `.env` file. You can then use either OpenAI or a local model (see below).
 
 ### Development with a local model — realistic AI, no API key
 
-Run a local model with [Ollama](https://ollama.com) and the server talks to it instead of OpenAI. Vision analysis is real; image generation falls back to SVG sprites unless you also run Stable Diffusion.
+Run Ollama in Docker alongside the app. The server uses it for vision analysis; image generation falls back to SVG sprites unless you also configure Stable Diffusion. The recommended model is `gemma3:12b` — it supports multimodal vision input and fits comfortably in 12 GB VRAM (e.g. RTX 5070).
 
 ```bash
-# 1. Install Ollama and pull a vision model (one-time)
-ollama pull llama3.2-vision
-
-# 2. Copy the local-ai template
+# 1. Copy the local-ai template
 cp .env.local-ai .env
-#    change LOCAL_BASE_URL to http://localhost:11434/v1 (native Ollama)
 
-# 3. Start the app
-npm run dev
+# 2. Start the app + Ollama container
+docker compose --profile local-ai up --build -d
+
+# 3. Pull the model (one-time, ~8 GB download)
+docker compose exec ollama ollama pull gemma3:12b
+
+# 4. Open in a browser
+open http://localhost:3000
 ```
 
-Then flip `MOCK_MODE = false` in `apps/session/api.ts`. When a child uploads a drawing, Ollama analyses it and describes the character; the generated sprites are distinctive SVG illustrations colour-coded by character type (dragon → red, robot → blue, etc.).
+When a child uploads a drawing, Ollama analyses it and describes the character. Generated sprites are distinctive SVG illustrations colour-coded by character type (dragon → red, robot → blue, etc.).
 
-**Adding real image generation** — run [Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui) with `--api`, then add `LOCAL_SD_URL=http://localhost:7860` to `.env`. The server will use Stable Diffusion instead of SVG sprites.
+**GPU acceleration** — the Ollama container uses NVIDIA GPU passthrough automatically when `nvidia-container-toolkit` is installed on the host. Without it Ollama falls back to CPU (still works, noticeably slower). Install guide: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+
+**Adding real image generation** — run [Automatic1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui) with `--api`, then add `LOCAL_SD_URL=http://host.docker.internal:7860` to `.env`. The server will use Stable Diffusion instead of SVG sprites.
 
 **Other local-model servers** — llama.cpp server, LM Studio, and cloud alternatives like Together.ai or Groq all expose an OpenAI-compatible API. Point `LOCAL_BASE_URL` at any of them. For image generation on Together.ai, also set `LOCAL_IMAGE_MODEL=black-forest-labs/FLUX.1-schnell`.
 
@@ -107,7 +111,7 @@ open http://localhost:3000
 ```bash
 cp .env.local-ai .env
 docker compose --profile local-ai up --build -d
-docker compose exec ollama ollama pull llama3.2-vision
+docker compose exec ollama ollama pull gemma3:12b
 ```
 
 `LOCAL_BASE_URL` in `.env.local-ai` already points to `http://ollama:11434/v1` (the Docker service name), so no further changes are needed.
@@ -153,7 +157,7 @@ Key variables:
 | `OPENAI_API_KEY` | — | Required when `AI_PROVIDER=openai` |
 | `LOCAL_BASE_URL` | `http://localhost:11434/v1` | Chat/vision endpoint (Ollama, llama.cpp, LM Studio, …) |
 | `LOCAL_API_KEY` | `ollama` | API key for the local endpoint (often a dummy value) |
-| `LOCAL_CHAT_MODEL` | `llama3.2-vision` | Vision-capable model to use |
+| `LOCAL_CHAT_MODEL` | `gemma3:12b` | Vision-capable model to use |
 | `LOCAL_IMAGE_MODEL` | — | If set, use this model for image generation via the same endpoint |
 | `LOCAL_SD_URL` | — | If set, use Automatic1111-compatible API for image generation |
 | `SESSION_PORT` | `3000` | Host port for the session app container |

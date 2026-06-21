@@ -37,9 +37,19 @@ body {
 .progress__dots { display: flex; gap: .5rem; align-items: center; }
 .progress__dot {
   width: 12px; height: 12px; border-radius: 50%;
-  transition: all .25s;
+  transition: all .2s; border: none; padding: 0;
+  background: #ddd; cursor: default; flex-shrink: 0;
 }
-.progress__dot--done     { background: var(--teal); }
+.progress__dot--done {
+  background: var(--teal); cursor: pointer;
+}
+.progress__dot--done:hover {
+  transform: scale(1.5); background: var(--orange);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--orange) 25%, transparent);
+}
+.progress__dot--done:focus-visible {
+  outline: 2px solid var(--orange); outline-offset: 2px;
+}
 .progress__dot--active   { background: var(--orange); width: 18px; height: 18px; }
 .progress__dot--upcoming { background: #ddd; }
 

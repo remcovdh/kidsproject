@@ -2,22 +2,46 @@ body {
   margin: 0;
   background: #111;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 100dvh;
 }
 
-canvas {
-  display: block;
-  border-radius: 1rem;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+.game-wrap {
+  position: relative;
+  display: inline-block;
 }
 
-#ui {
-  color: white;
-  font-family: system-ui, sans-serif;
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-top: 1rem;
+#game {
+  display: block;
+  border-radius: 1rem;
+  box-shadow: 0 8px 40px rgba(0,0,0,.6);
 }
+
+.game-overlay {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.overlay-btn {
+  pointer-events: all;
+  font-family: system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  padding: .5rem 1.25rem;
+  border: none;
+  border-radius: 99px;
+  cursor: pointer;
+  background: rgba(255,255,255,0.92);
+  color: #2D2D2D;
+  box-shadow: 0 2px 14px rgba(0,0,0,.35);
+  transition: transform .1s;
+}
+
+.overlay-btn:active { transform: scale(.96); }
+
+.overlay-btn--primary { background: #FF6B35; color: white; }

@@ -4,11 +4,11 @@ const API = "";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-function b64svg(pose: string, bg: string): string {
+function svgUrl(label: string, bg: string): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
     <rect width="200" height="200" fill="${bg}" rx="24"/>
     <text x="100" y="115" font-size="28" text-anchor="middle" fill="white"
-      font-family="sans-serif" font-weight="bold">${pose}</text>
+      font-family="sans-serif" font-weight="bold">${label}</text>
   </svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
@@ -46,7 +46,19 @@ export interface GalleryItem {
   previewUrl: string;
   gameType: "catcher" | "jumper";
   sprites: SpritePack;
+  backgroundUrl?: string | null;
 }
+
+// ── Mock published-game store ─────────────────────────────────────────────────
+
+interface MockPublished {
+  childId: string;
+  childName: string;
+  sprites: SpritePack;
+  backgroundUrl?: string | null;
+}
+
+const _published: MockPublished[] = [];
 
 // ── API calls ─────────────────────────────────────────────────────────────────
 
@@ -74,10 +86,7 @@ export async function registerChild(sessionId: string, name: string): Promise<st
 export async function uploadDrawing(file: File): Promise<{ drawingUrl: string; drawingBase64: string }> {
   if (MOCK_MODE) {
     await sleep(400);
-    return {
-      drawingUrl: URL.createObjectURL(file),
-      drawingBase64: await fileToBase64(file),
-    };
+    return { drawingUrl: URL.createObjectURL(file), drawingBase64: await fileToBase64(file) };
   }
   const form = new FormData();
   form.append("drawing", file);
@@ -101,18 +110,18 @@ export async function generateSprites(
   if (MOCK_MODE) {
     await sleep(2800);
     _versionCount++;
-    const label = VERSION_LABELS[_versionCount - 1] ?? `Try ${_versionCount}`;
+    const label  = VERSION_LABELS[_versionCount - 1] ?? `Try ${_versionCount}`;
     const colors = ["#FF6B35", "#4ECDC4", "#A855F7", "#F59E0B"];
-    const bg = colors[(_versionCount - 1) % colors.length];
+    const bg     = colors[(_versionCount - 1) % colors.length];
     return {
       id: `v${_versionCount}_${Date.now()}`,
       label,
       prompt: `Turn this child's drawing into a game character sprite pack. The character is: ${description}.`,
       sprites: {
-        idle:      b64svg("idle",      bg),
-        move:      b64svg("move",      "#4ECDC4"),
-        action:    b64svg("action!",   "#F59E0B"),
-        celebrate: b64svg("yay! 🎉",  "#A8E6CF"),
+        idle:      svgUrl("idle",       bg),
+        move:      svgUrl("move",       "#4ECDC4"),
+        action:    svgUrl("action!",    "#F59E0B"),
+        celebrate: svgUrl("yay!",       "#A8E6CF"),
       },
       createdAt: new Date().toISOString(),
     };
@@ -127,9 +136,22 @@ export async function generateSprites(
 export async function publishGame(
   childId: string,
   spriteVersionId: string,
-  sounds: Record<string, string>
+  sounds: Record<string, string>,
+  // Server derives name/sprites from childId — only needed for mock gallery
+  _mockMeta?: { childName: string; sprites: SpritePack; backgroundUrl?: string | null }
 ): Promise<void> {
-  if (MOCK_MODE) { await sleep(500); return; }
+  if (MOCK_MODE) {
+    if (_mockMeta) {
+      _published.unshift({
+        childId,
+        childName: _mockMeta.childName,
+        sprites:   _mockMeta.sprites,
+        backgroundUrl: _mockMeta.backgroundUrl,
+      });
+    }
+    await sleep(500);
+    return;
+  }
   await fetch(`${API}/api/sessions/publish`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -139,12 +161,21 @@ export async function publishGame(
 
 export async function fetchGallery(sessionId: string): Promise<GalleryItem[]> {
   if (MOCK_MODE) {
-    await sleep(600);
-    return [
-      { childId: "c1", childName: "Emma",  previewUrl: b64svg("idle", "#FF6B35"), gameType: "catcher", sprites: { idle: b64svg("idle", "#FF6B35"), move: b64svg("move", "#4ECDC4"), action: b64svg("action!", "#F59E0B"), celebrate: b64svg("yay! 🎉", "#A8E6CF") } },
-      { childId: "c2", childName: "Liam",  previewUrl: b64svg("idle", "#4ECDC4"), gameType: "catcher", sprites: { idle: b64svg("idle", "#4ECDC4"), move: b64svg("move", "#FF6B35"), action: b64svg("action!", "#A855F7"), celebrate: b64svg("yay! 🎉", "#A8E6CF") } },
-      { childId: "c3", childName: "Sofia", previewUrl: b64svg("idle", "#A855F7"), gameType: "catcher", sprites: { idle: b64svg("idle", "#A855F7"), move: b64svg("move", "#F59E0B"), action: b64svg("action!", "#4ECDC4"), celebrate: b64svg("yay! 🎉", "#A8E6CF") } },
+    await sleep(400);
+    const userGames: GalleryItem[] = _published.map((g) => ({
+      childId:      g.childId,
+      childName:    g.childName,
+      previewUrl:   g.sprites.idle,
+      gameType:     "catcher" as const,
+      sprites:      g.sprites,
+      backgroundUrl: g.backgroundUrl,
+    }));
+    const demoGames: GalleryItem[] = [
+      { childId: "c1", childName: "Emma",  previewUrl: svgUrl("idle", "#FF6B35"), gameType: "catcher", sprites: { idle: svgUrl("idle", "#FF6B35"), move: svgUrl("move", "#4ECDC4"), action: svgUrl("action!", "#F59E0B"), celebrate: svgUrl("yay!", "#A8E6CF") } },
+      { childId: "c2", childName: "Liam",  previewUrl: svgUrl("idle", "#4ECDC4"), gameType: "catcher", sprites: { idle: svgUrl("idle", "#4ECDC4"), move: svgUrl("move", "#FF6B35"), action: svgUrl("action!", "#A855F7"), celebrate: svgUrl("yay!", "#A8E6CF") } },
+      { childId: "c3", childName: "Sofia", previewUrl: svgUrl("idle", "#A855F7"), gameType: "catcher", sprites: { idle: svgUrl("idle", "#A855F7"), move: svgUrl("move", "#F59E0B"), action: svgUrl("action!", "#4ECDC4"), celebrate: svgUrl("yay!", "#A8E6CF") } },
     ];
+    return [...userGames, ...demoGames];
   }
   return fetch(`${API}/api/sessions/${sessionId}/gallery`).then((r) => r.json());
 }
@@ -152,7 +183,7 @@ export async function fetchGallery(sessionId: string): Promise<GalleryItem[]> {
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(",")[1]);
+    reader.onload  = () => resolve((reader.result as string).split(",")[1]);
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });

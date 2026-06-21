@@ -30,7 +30,12 @@ export function renderPublish(
       await publishGame(
         state.childId ?? "anon",
         state.activeSpriteVersionId ?? "",
-        state.soundAssignments
+        state.soundAssignments,
+        {
+          childName:    state.childName ?? "You",
+          sprites:      version?.sprites ?? { idle: "", move: "", action: "", celebrate: "" },
+          backgroundUrl: state.backgroundUrl,
+        }
       );
       goToStep("gallery", { published: true });
     } catch {

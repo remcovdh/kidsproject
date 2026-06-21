@@ -33,7 +33,10 @@ export function renderGallery(
   const modalFrame = container.querySelector<HTMLIFrameElement>("#modal-frame")!;
 
   function openGame(item: GalleryItem) {
-    localStorage.setItem("kidsproject_sprites", JSON.stringify(item.sprites));
+    localStorage.setItem("kidsproject_sprites", JSON.stringify({
+      ...item.sprites,
+      ...(item.backgroundUrl ? { background: item.backgroundUrl } : {}),
+    }));
     modalTitle.textContent = `${item.childName}'s game`;
     modalFrame.src = `/games/${item.gameType}/`;
     modal.hidden = false;

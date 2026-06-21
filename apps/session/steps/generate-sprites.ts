@@ -6,6 +6,13 @@ function description(state: SessionState): string {
   return `A ${d.feeling} ${d.what} that moves in a ${d.movement} way`;
 }
 
+function saveToLocalStorage(sprites: SpriteVersion["sprites"], backgroundUrl: string | null) {
+  localStorage.setItem("kidsproject_sprites", JSON.stringify({
+    ...sprites,
+    ...(backgroundUrl ? { background: backgroundUrl } : {}),
+  }));
+}
+
 function spritePoses(v: SpriteVersion): string {
   const poses: Array<[keyof SpriteVersion["sprites"], string]> = [
     ["idle",      "Standing still"],
@@ -80,13 +87,13 @@ export function renderGenerateSprites(
 
       container.querySelector(".step")!.appendChild(
         history(versions, (v) => {
-          localStorage.setItem("kidsproject_sprites", JSON.stringify(v.sprites));
+          saveToLocalStorage(v.sprites, state.backgroundUrl);
           goToStep("preview-game", { spriteVersions: versions, activeSpriteVersionId: v.id });
         })
       );
 
       container.querySelector("#play-btn")?.addEventListener("click", () => {
-        localStorage.setItem("kidsproject_sprites", JSON.stringify(version.sprites));
+        saveToLocalStorage(version.sprites, state.backgroundUrl);
         goToStep("preview-game", { spriteVersions: versions, activeSpriteVersionId: version.id });
       });
 

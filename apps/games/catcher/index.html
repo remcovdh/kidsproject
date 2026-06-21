@@ -7,10 +7,12 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <canvas id="game" width="480" height="640"></canvas>
-  <div id="ui">
-    <div id="score">Score: <span id="score-value">0</span></div>
-    <div id="message" hidden></div>
+  <div class="game-wrap">
+    <canvas id="game" width="480" height="640"></canvas>
+    <div class="game-overlay">
+      <button class="overlay-btn" id="stop-btn">✋ Stop</button>
+      <button class="overlay-btn overlay-btn--primary" id="replay-btn" hidden>▶ Play again</button>
+    </div>
   </div>
   <script type="module" src="game.js"></script>
 </body>

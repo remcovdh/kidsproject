@@ -14,7 +14,7 @@
  * Relevant env vars (all optional, sensible defaults shown):
  *   LOCAL_BASE_URL      http://ollama:11434/v1      Docker service name (or http://localhost:11434/v1 for native)
  *   LOCAL_API_KEY       ollama                      dummy key Ollama needs
- *   LOCAL_CHAT_MODEL    gemma3:12b                  vision-capable model
+ *   LOCAL_CHAT_MODEL    gemma4:12b                  vision-capable model
  *   LOCAL_IMAGE_MODEL                               set to use OAI images API
  *   LOCAL_SD_URL                                    set to use A1111 SD API
  */
@@ -144,7 +144,7 @@ const provider: ServerAiProvider = {
   async generateSprites(description: string, drawingBase64: string): Promise<SpriteBuffers> {
     const baseURL    = process.env.LOCAL_BASE_URL   ?? "http://localhost:11434/v1";
     const apiKey     = process.env.LOCAL_API_KEY    ?? "ollama";
-    const chatModel  = process.env.LOCAL_CHAT_MODEL ?? "gemma3:12b";
+    const chatModel  = process.env.LOCAL_CHAT_MODEL ?? "gemma4:12b";
     const imageModel = process.env.LOCAL_IMAGE_MODEL ?? "";
     const useSD      = !!process.env.LOCAL_SD_URL;
     const useImgApi  = !!imageModel;

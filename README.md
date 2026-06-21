@@ -68,7 +68,7 @@ The client runs in **mock mode** by default — all AI responses are instant SVG
 
 ### Development with a local model — realistic AI, no API key
 
-Run Ollama in Docker alongside the app. The server uses it for vision analysis; image generation falls back to SVG sprites unless you also configure Stable Diffusion. The recommended model is `gemma3:12b` — it supports multimodal vision input and fits comfortably in 12 GB VRAM (e.g. RTX 5070).
+Run Ollama in Docker alongside the app. The server uses it for vision analysis; image generation falls back to SVG sprites unless you also configure Stable Diffusion. The recommended model is `gemma4:12b` — it supports multimodal vision input and fits comfortably in 12 GB VRAM (e.g. RTX 5070).
 
 ```bash
 # 1. Copy the local-ai template
@@ -78,7 +78,7 @@ cp .env.local-ai .env
 docker compose --profile local-ai up --build -d
 
 # 3. Pull the model (one-time, ~8 GB download)
-docker compose exec ollama ollama pull gemma3:12b
+docker compose exec ollama ollama pull gemma4:12b
 
 # 4. Open in a browser
 open http://localhost:3000
@@ -111,7 +111,7 @@ open http://localhost:3000
 ```bash
 cp .env.local-ai .env
 docker compose --profile local-ai up --build -d
-docker compose exec ollama ollama pull gemma3:12b
+docker compose exec ollama ollama pull gemma4:12b
 ```
 
 `LOCAL_BASE_URL` in `.env.local-ai` already points to `http://ollama:11434/v1` (the Docker service name), so no further changes are needed.
@@ -157,7 +157,7 @@ Key variables:
 | `OPENAI_API_KEY` | — | Required when `AI_PROVIDER=openai` |
 | `LOCAL_BASE_URL` | `http://localhost:11434/v1` | Chat/vision endpoint (Ollama, llama.cpp, LM Studio, …) |
 | `LOCAL_API_KEY` | `ollama` | API key for the local endpoint (often a dummy value) |
-| `LOCAL_CHAT_MODEL` | `gemma3:12b` | Vision-capable model to use |
+| `LOCAL_CHAT_MODEL` | `gemma4:12b` | Vision-capable model to use |
 | `LOCAL_IMAGE_MODEL` | — | If set, use this model for image generation via the same endpoint |
 | `LOCAL_SD_URL` | — | If set, use Automatic1111-compatible API for image generation |
 | `SESSION_PORT` | `3000` | Host port for the session app container |

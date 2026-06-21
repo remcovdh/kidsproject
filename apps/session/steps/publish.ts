@@ -34,7 +34,7 @@ export function renderPublish(
         state.backgroundUrl,
         {
           childName: state.childName ?? "You",
-          sprites:   version?.sprites ?? { idle: "", move: "", action: "", celebrate: "" },
+          sprites:   version?.sprites ?? { idle: "", move: "", action: "", celebrate: "", collectible: "" },
         }
       );
       goToStep("gallery", { published: true });

@@ -87,8 +87,6 @@ export function renderUploadBackground(
       const errorBox    = container.querySelector<HTMLElement>("#error-box")!;
       const errorDetail = container.querySelector<HTMLElement>("#error-detail")!;
 
-      uploadArea.addEventListener("click", () => fileInput.click());
-
       fileInput.addEventListener("change", () => {
         const file = fileInput.files?.[0];
         if (!file) return;
@@ -239,8 +237,6 @@ export function renderUploadBackground(
           ? "📸 Add a photo as inspiration (optional)"
           : "📸 Hide inspiration photo ▲";
       });
-
-      inspirationArea.addEventListener("click", () => inspirationInput.click());
 
       inspirationInput.addEventListener("change", () => {
         const file = inspirationInput.files?.[0];

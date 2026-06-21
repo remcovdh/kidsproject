@@ -32,16 +32,14 @@ export function renderUploadDrawing(
   `;
 
   const fileInput  = container.querySelector<HTMLInputElement>("#file-input")!;
-  const uploadArea = container.querySelector<HTMLElement>("#upload-area")!;
   const preview    = container.querySelector<HTMLElement>("#drawing-preview")!;
   const previewImg = container.querySelector<HTMLImageElement>("#preview-img")!;
   const retakeBtn  = container.querySelector<HTMLButtonElement>("#retake-btn")!;
   const nextBtn    = container.querySelector<HTMLButtonElement>("#next-btn")!;
   const errorBox   = container.querySelector<HTMLElement>("#error-box")!;
   const errorDetail = container.querySelector<HTMLElement>("#error-detail")!;
+  const uploadArea = container.querySelector<HTMLElement>("#upload-area")!;
   let selectedFile: File | null = null;
-
-  uploadArea.addEventListener("click", () => fileInput.click());
 
   fileInput.addEventListener("change", () => {
     const file = fileInput.files?.[0];

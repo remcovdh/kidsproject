@@ -122,10 +122,10 @@ const provider: ServerAiProvider = {
     const response = await client.images.generate({
       model: "gpt-image-1",
       prompt:
-        `A wide landscape background for a children's video game. Scene: ${sceneDescription}.${styleClause} ` +
-        `Colorful, cheerful, childlike art style. No characters, no text, just the scenery. ` +
-        `Flat 2D illustration style, vibrant colors, bold shapes.`,
-      size: "1536x1024",
+        `A tall portrait-orientation background for a children's video game (taller than wide, like a phone screen). Scene: ${sceneDescription}.${styleClause} ` +
+        `Sky fills the top half, ground or scenery at the bottom. Colorful, cheerful, childlike art style. ` +
+        `No characters, no text, just the scenery. Flat 2D illustration style, vibrant colors, bold shapes.`,
+      size: "1024x1536",
       quality: "medium",
       n: 1,
     });

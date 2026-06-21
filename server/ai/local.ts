@@ -309,9 +309,9 @@ const provider: ServerAiProvider = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: `landscape background for a children's video game, ${sceneDescription}${styleClause}, simple 2d cartoon, colorful, no characters, no text`,
+          prompt: `portrait background for a children's video game, tall format, ${sceneDescription}${styleClause}, simple 2d cartoon, colorful, no characters, no text`,
           negative_prompt: "text, watermark, characters, people",
-          width: 768, height: 512, steps: 20, cfg_scale: 7,
+          width: 512, height: 768, steps: 20, cfg_scale: 7,
         }),
       });
       const json = await res.json() as { images?: string[] };
@@ -320,7 +320,7 @@ const provider: ServerAiProvider = {
       const client = new OpenAI({ baseURL, apiKey });
       const resp = await client.images.generate({
         model: imageModel,
-        prompt: `Wide landscape background for a children's video game. Scene: ${sceneDescription}${styleClause}. Colorful, childlike art, no characters, no text.`,
+        prompt: `Tall portrait-orientation background for a children's video game (taller than wide). Scene: ${sceneDescription}${styleClause}. Sky at top, scenery at bottom. Colorful, childlike art, no characters, no text.`,
         size: "1024x1024", n: 1,
       });
       const url = resp.data?.[0]?.url;

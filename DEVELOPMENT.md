@@ -175,6 +175,49 @@ The server runs on port 3002. All paths are prefixed `/api/`. A demo session (`i
 | `POST` | `/api/ai/sprites` | Generate a sprite pack from a drawing + description |
 | `POST` | `/api/moderation/check` | Check free-text input before it reaches the AI |
 
+## Troubleshooting
+
+### Where to look for errors
+
+**Server logs**
+
+- Development (`npm run dev`): output appears directly in the terminal where you ran the command.
+- Docker: `docker compose logs server --tail=100 --follow` streams live server output. Look for lines starting with `Sprite generation error:` or HTTP 4xx/5xx lines.
+
+**Browser**
+
+Open DevTools (F12) and check two tabs:
+- **Console** — JavaScript errors from the frontend are logged here, prefixed with `[upload-drawing]` or `[generate-sprites]`.
+- **Network** — filter by XHR/Fetch. A red row means a failed API call. Click it and check the **Response** tab to see the server's error message.
+
+The app now also shows the raw server error message in the UI next to "Ask your teacher for help" — so a facilitator watching over the child's shoulder can read it directly.
+
+### Common problems and fixes
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Upload button goes back to normal with no progress | Server not reachable (wrong `VITE_MOCK`, server not running, CORS) | Check server terminal; check `VITE_MOCK=false` in `.env`; check `http://localhost:3002/api/sessions/demo` returns JSON |
+| Upload works but sprite generation shows "Ask your teacher" | `OPENAI_API_KEY` missing or quota exceeded | Check server log for `Sprite generation error:`; verify key in `.env` |
+| App loads but everything is instant placeholder sprites | `VITE_MOCK` is still `true` | Add `VITE_MOCK=false` to `.env` and restart the dev server |
+| Docker container starts then immediately stops | Port conflict, or missing `.env` | Run `docker compose logs server` to see the crash reason |
+| Ollama times out on first request | Model not pulled yet | `docker compose exec ollama ollama pull gemma4:12b` |
+
+### Quick sanity check (Docker)
+
+```bash
+# Is the server healthy?
+curl http://localhost:3002/api/sessions/demo
+
+# Expected: {"id":"demo","name":"Dragon Workshop 🐉",...}
+# If you get connection refused: server container is not running
+# If you get {"error":"..."}: server started but hit a config problem (check logs)
+```
+
+```bash
+# Full log tail for all services
+docker compose logs --tail=50 --follow
+```
+
 ## Code conventions
 
 - No framework in `apps/games/` — plain HTML/CSS/JS only, must open with `file://`

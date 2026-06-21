@@ -101,12 +101,18 @@ export function renderGenerateSprites(
         goToStep("generate-sprites", { spriteVersions: versions });
       });
     })
-    .catch(() => {
+    .catch((err: unknown) => {
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error("[generate-sprites]", err);
       container.innerHTML = `
         <div class="step">
           <h1 class="step__title">Oops! 😅</h1>
-          <p class="step__subtitle">Something went wrong. Let's try again!</p>
-          <button class="btn btn--primary" id="retry-btn">Try again</button>
+          <p class="step__subtitle">The AI couldn't make your character this time.</p>
+          <div class="error-box">
+            <p class="error-box__child">Ask your teacher or helper for help! 🙋</p>
+            <p class="error-box__detail">${detail}</p>
+          </div>
+          <button class="btn btn--primary" id="retry-btn">Try again 🔄</button>
         </div>
       `;
       container.querySelector("#retry-btn")?.addEventListener("click", () => {

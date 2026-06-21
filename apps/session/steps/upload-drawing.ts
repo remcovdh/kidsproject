@@ -24,6 +24,10 @@ export function renderUploadDrawing(
       </div>
 
       <button class="btn btn--primary btn--big" id="next-btn" disabled>That's my drawing! →</button>
+      <div class="error-box" id="error-box" hidden>
+        <p class="error-box__child">Something went wrong with the upload. Ask your teacher for help! 🙋</p>
+        <p class="error-box__detail" id="error-detail"></p>
+      </div>
     </div>
   `;
 
@@ -33,6 +37,8 @@ export function renderUploadDrawing(
   const previewImg = container.querySelector<HTMLImageElement>("#preview-img")!;
   const retakeBtn  = container.querySelector<HTMLButtonElement>("#retake-btn")!;
   const nextBtn    = container.querySelector<HTMLButtonElement>("#next-btn")!;
+  const errorBox   = container.querySelector<HTMLElement>("#error-box")!;
+  const errorDetail = container.querySelector<HTMLElement>("#error-detail")!;
   let selectedFile: File | null = null;
 
   uploadArea.addEventListener("click", () => fileInput.click());
@@ -59,12 +65,16 @@ export function renderUploadDrawing(
     if (!selectedFile) return;
     nextBtn.disabled = true;
     nextBtn.textContent = "Uploading... ⏳";
+    errorBox.hidden = true;
     try {
       const result = await uploadDrawing(selectedFile);
       goToStep("upload-background", { drawingUrl: result.drawingUrl, drawingBase64: result.drawingBase64 });
-    } catch {
+    } catch (err) {
+      console.error("[upload-drawing]", err);
       nextBtn.disabled = false;
       nextBtn.textContent = "That's my drawing! →";
+      errorDetail.textContent = err instanceof Error ? err.message : String(err);
+      errorBox.hidden = false;
     }
   });
 }

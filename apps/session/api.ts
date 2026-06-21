@@ -3,6 +3,16 @@
 const MOCK_MODE = import.meta.env["VITE_MOCK"] !== "false";
 const API = "";
 
+async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  const r = await fetch(url, options);
+  if (!r.ok) {
+    let msg = `Server returned ${r.status}`;
+    try { const b = await r.json(); if (b?.error) msg = b.error; } catch { /* */ }
+    throw new Error(msg);
+  }
+  return r.json() as Promise<T>;
+}
+
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function svgUrl(label: string, bg: string): string {
@@ -68,7 +78,7 @@ export async function fetchSession(sessionId: string): Promise<SessionConfig> {
     await sleep(200);
     return { id: sessionId || "demo", name: "Dragon Workshop 🐉", showPrompt: true, aiProvider: "openai" };
   }
-  return fetch(`${API}/api/sessions/${sessionId}`).then((r) => r.json());
+  return apiFetch<SessionConfig>(`${API}/api/sessions/${sessionId}`);
 }
 
 export async function registerChild(sessionId: string, name: string): Promise<string> {
@@ -76,12 +86,12 @@ export async function registerChild(sessionId: string, name: string): Promise<st
     await sleep(150);
     return `child_${Math.random().toString(36).slice(2, 8)}`;
   }
-  const r = await fetch(`${API}/api/sessions/${sessionId}/children`, {
+  const r = await apiFetch<{ childId: string }>(`${API}/api/sessions/${sessionId}/children`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name }),
   });
-  return (await r.json()).childId;
+  return r.childId;
 }
 
 export async function uploadDrawing(file: File): Promise<{ drawingUrl: string; drawingBase64: string }> {
@@ -91,7 +101,7 @@ export async function uploadDrawing(file: File): Promise<{ drawingUrl: string; d
   }
   const form = new FormData();
   form.append("drawing", file);
-  const { drawingUrl } = await fetch(`${API}/api/uploads/drawing`, { method: "POST", body: form }).then((r) => r.json());
+  const { drawingUrl } = await apiFetch<{ drawingUrl: string }>(`${API}/api/uploads/drawing`, { method: "POST", body: form });
   // Compute base64 client-side so we don't round-trip large data through the server
   const drawingBase64 = await fileToBase64(file);
   return { drawingUrl, drawingBase64 };
@@ -99,11 +109,11 @@ export async function uploadDrawing(file: File): Promise<{ drawingUrl: string; d
 
 export async function checkModeration(text: string): Promise<{ allowed: boolean }> {
   if (MOCK_MODE) return { allowed: true };
-  return fetch(`${API}/api/moderation/check`, {
+  return apiFetch<{ allowed: boolean }>(`${API}/api/moderation/check`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
-  }).then((r) => r.json());
+  });
 }
 
 export async function generateSprites(
@@ -130,11 +140,11 @@ export async function generateSprites(
       createdAt: new Date().toISOString(),
     };
   }
-  return fetch(`${API}/api/ai/sprites`, {
+  return apiFetch<SpriteVersion>(`${API}/api/ai/sprites`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ childId, description, drawingBase64: _drawingBase64 }),
-  }).then((r) => r.json());
+  });
 }
 
 export async function publishGame(
@@ -157,7 +167,7 @@ export async function publishGame(
     await sleep(500);
     return;
   }
-  await fetch(`${API}/api/sessions/publish`, {
+  await apiFetch(`${API}/api/sessions/publish`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ childId, spriteVersionId, sounds, backgroundUrl }),
@@ -182,7 +192,7 @@ export async function fetchGallery(sessionId: string): Promise<GalleryItem[]> {
     ];
     return [...userGames, ...demoGames];
   }
-  return fetch(`${API}/api/sessions/${sessionId}/gallery`).then((r) => r.json());
+  return apiFetch<GalleryItem[]>(`${API}/api/sessions/${sessionId}/gallery`);
 }
 
 function fileToBase64(file: File): Promise<string> {

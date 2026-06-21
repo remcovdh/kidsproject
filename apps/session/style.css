@@ -288,6 +288,18 @@ kbd {
 .gallery-card__play { font-size: .85rem; color: var(--orange); font-weight: 600; }
 .gallery__loading, .gallery__empty { color: var(--muted); text-align: center; width: 100%; padding: 2rem 0; }
 
+/* ── Error box ────────────────────────────────────────────────────────────── */
+.error-box {
+  background: color-mix(in srgb, #FF6B35 10%, transparent);
+  border: 2px solid color-mix(in srgb, #FF6B35 40%, transparent);
+  border-radius: var(--radius);
+  padding: .85rem 1.1rem;
+  display: flex; flex-direction: column; gap: .35rem;
+  width: 100%; text-align: left;
+}
+.error-box__child  { font-size: 1rem; font-weight: 700; }
+.error-box__detail { font-size: .8rem; color: var(--muted); font-family: monospace; word-break: break-word; }
+
 /* ── Modal ────────────────────────────────────────────────────────────────── */
 .modal {
   position: fixed; inset: 0; z-index: 100;

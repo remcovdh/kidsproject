@@ -1,19 +1,19 @@
-// Each sprite comes back with its raw data and the file extension to use when saving.
-// PNG for real images (OpenAI DALL-E, Stable Diffusion), SVG for generated placeholders.
 export interface SpriteFile {
   data: Buffer;
   ext:  "png" | "svg";
 }
 
 export interface SpriteBuffers {
-  idle:      SpriteFile;
-  move:      SpriteFile;
-  action:    SpriteFile;
-  celebrate: SpriteFile;
+  idle:        SpriteFile;
+  move:        SpriteFile;
+  action:      SpriteFile;
+  celebrate:   SpriteFile;
+  collectible: SpriteFile; // the item that falls in the catcher game
 }
 
 export interface ServerAiProvider {
   generateSprites(description: string, drawingBase64: string): Promise<SpriteBuffers>;
+  generateBackground?(description: string): Promise<SpriteFile>;
 }
 
 export async function getServerProvider(providerName: string): Promise<ServerAiProvider> {

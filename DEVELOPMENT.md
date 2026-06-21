@@ -177,6 +177,26 @@ The server runs on port 3002. All paths are prefixed `/api/`. A demo session (`i
 
 ## Troubleshooting
 
+### Adding sound files
+
+The customize step lets children assign sounds to game events. Sound files are not included in the repo — add your own MP3s here:
+
+```
+apps/games/catcher/assets/sounds/
+  boing.mp3
+  splat.mp3
+  whoosh.mp3
+  pop.mp3
+  squeak.mp3
+  roar.mp3
+  giggle.mp3
+  crash.mp3
+```
+
+Until the files are present, the customize step shows a notice ("Sound previews aren't working right now 🔇") when a child taps a sound chip. The game itself also silently skips sounds that are missing — no crash, just silence.
+
+Free sources for short sound effects: [freesound.org](https://freesound.org), [mixkit.co/free-sound-effects](https://mixkit.co/free-sound-effects/).
+
 ### Where to look for errors
 
 **Server logs**

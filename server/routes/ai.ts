@@ -67,3 +67,34 @@ aiRouter.post("/sprites", async (req, res) => {
     res.status(500).json({ error: String(err instanceof Error ? err.message : err) });
   }
 });
+
+// POST /api/ai/background — generate a background image from a text description
+// Body: { description, aiProvider? }
+// Returns: { backgroundUrl }
+aiRouter.post("/background", async (req, res) => {
+  const { description, aiProvider } = req.body as { description?: string; aiProvider?: string };
+  if (!description?.trim()) {
+    return res.status(400).json({ error: "description is required" });
+  }
+
+  const providerName = aiProvider ?? process.env.AI_PROVIDER ?? "openai";
+  if (providerName === "openai" && !process.env.OPENAI_API_KEY) {
+    return res.status(500).json({
+      error: "OPENAI_API_KEY is not set on the server. Add it to your .env file and restart.",
+    });
+  }
+
+  try {
+    const provider = await getServerProvider(providerName);
+    if (!provider.generateBackground) {
+      return res.status(501).json({ error: `Provider "${providerName}" does not support background generation.` });
+    }
+    const { data, ext } = await provider.generateBackground(description);
+    const filename = `bg_${uuid()}.${ext}`;
+    writeFileSync(join(UPLOAD_DIR, filename), data);
+    res.json({ backgroundUrl: `/uploads/${filename}` });
+  } catch (err) {
+    console.error("Background generation error:", err);
+    res.status(500).json({ error: String(err instanceof Error ? err.message : err) });
+  }
+});

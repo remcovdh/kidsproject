@@ -82,7 +82,46 @@ const POSES: Record<keyof SpriteBuffers, Pose> = {
   },
 };
 
-function svgSprite(description: string, pose: keyof SpriteBuffers): SpriteFile {
+function svgCollectible(description: string): SpriteFile {
+  const [fill, dark] = pickColor(description);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <rect width="200" height="200" fill="white"/>
+  <polygon points="100,18 120,74 180,74 132,110 150,166 100,132 50,166 68,110 20,74 80,74"
+    fill="${fill}" stroke="${dark}" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="100" cy="100" r="20" fill="white" opacity="0.4"/>
+</svg>`;
+  return { data: Buffer.from(svg), ext: "svg" };
+}
+
+function svgBackground(description: string): SpriteFile {
+  const lower = description.toLowerCase();
+  let sky = "#87CEEB", ground = "#90EE90";
+  if (lower.includes("space") || lower.includes("night") || lower.includes("galaxy"))
+    { sky = "#0D0D2B"; ground = "#1a1a3e"; }
+  else if (lower.includes("underwater") || lower.includes("ocean") || lower.includes("sea"))
+    { sky = "#006994"; ground = "#004D6B"; }
+  else if (lower.includes("fire") || lower.includes("lava") || lower.includes("volcano"))
+    { sky = "#FF4500"; ground = "#8B0000"; }
+  else if (lower.includes("snow") || lower.includes("winter") || lower.includes("ice"))
+    { sky = "#B0C4DE"; ground = "#FFFAFA"; }
+  else if (lower.includes("forest") || lower.includes("jungle"))
+    { sky = "#87CEEB"; ground = "#228B22"; }
+  else if (lower.includes("desert") || lower.includes("sand"))
+    { sky = "#FFD700"; ground = "#DEB887"; }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 640" width="480" height="640">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${sky}"/>
+      <stop offset="70%" stop-color="${sky}" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="${ground}"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="640" fill="url(#bg)"/>
+</svg>`;
+  return { data: Buffer.from(svg), ext: "svg" };
+}
+
+function svgSprite(description: string, pose: Exclude<keyof SpriteBuffers, "collectible">): SpriteFile {
   const [fill, dark] = pickColor(description);
   const p = POSES[pose];
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
@@ -106,14 +145,14 @@ function svgSprite(description: string, pose: keyof SpriteBuffers): SpriteFile {
 
 // ── Stable Diffusion via Automatic1111 REST API ───────────────────────────────
 
-const SD_POSE_PROMPTS: Record<keyof SpriteBuffers, string> = {
+const SD_POSE_PROMPTS: Record<Exclude<keyof SpriteBuffers, "collectible">, string> = {
   idle:      "standing still, relaxed, neutral pose, arms at sides",
   move:      "running, motion, dynamic, sideways",
   action:    "jumping, arms outstretched, action pose",
   celebrate: "celebrating, arms raised in victory, happy",
 };
 
-async function generateViaSD(characterDesc: string, pose: keyof SpriteBuffers): Promise<SpriteFile> {
+async function generateViaSD(characterDesc: string, pose: Exclude<keyof SpriteBuffers, "collectible">): Promise<SpriteFile> {
   const sdUrl = process.env.LOCAL_SD_URL!.replace(/\/$/, "");
   const body  = {
     prompt: `game character sprite, ${characterDesc}, ${SD_POSE_PROMPTS[pose]}, simple 2d cartoon, white background, centered, no text, no watermark`,
@@ -133,7 +172,7 @@ async function generateViaSD(characterDesc: string, pose: keyof SpriteBuffers): 
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
-const VISION_POSE_PROMPTS: Record<keyof SpriteBuffers, string> = {
+const VISION_POSE_PROMPTS: Record<Exclude<keyof SpriteBuffers, "collectible">, string> = {
   idle:      "standing still, relaxed, neutral upright pose",
   move:      "running or sliding sideways, dynamic movement",
   action:    "jumping or attacking, exciting action pose",
@@ -178,31 +217,92 @@ const provider: ServerAiProvider = {
       console.log("[local] No image generation endpoint configured — using SVG sprites.");
     }
 
-    const entries = await Promise.all(
-      (Object.keys(VISION_POSE_PROMPTS) as (keyof SpriteBuffers)[]).map(async (pose) => {
-        let sprite: SpriteFile;
+    const poses = Object.keys(VISION_POSE_PROMPTS) as Exclude<keyof SpriteBuffers, "collectible">[];
 
+    const [poseEntries, collectibleSprite] = await Promise.all([
+      Promise.all(poses.map(async (pose) => {
+        let sprite: SpriteFile;
         if (useSD) {
           sprite = await generateViaSD(characterDesc, pose);
         } else if (useImgApi) {
           const prompt =
-            `Simple 2D game character sprite. ${characterDesc}. ` +
+            `Simple 2D game character sprite. CHARACTER (keep identical across all poses): ${characterDesc}. ` +
             `Pose: ${VISION_POSE_PROMPTS[pose]}. ` +
             `Childlike art, bold outlines, bright colors, white background, centered, no text.`;
           const resp = await client.images.generate({ model: imageModel, prompt, size: "1024x1024", n: 1 });
           const url  = resp.data?.[0]?.url;
           if (!url) throw new Error(`No image URL returned for pose: ${pose}`);
-          const imgBuf = await fetch(url).then(r => r.arrayBuffer());
-          sprite = { data: Buffer.from(imgBuf), ext: "png" };
+          sprite = { data: Buffer.from(await fetch(url).then(r => r.arrayBuffer())), ext: "png" };
         } else {
           sprite = svgSprite(characterDesc, pose);
         }
-
         return [pose, sprite] as const;
-      })
-    );
+      })),
 
-    return Object.fromEntries(entries) as unknown as SpriteBuffers;
+      (async (): Promise<SpriteFile> => {
+        if (useSD) {
+          const sdUrl = process.env.LOCAL_SD_URL!.replace(/\/$/, "");
+          const res = await fetch(`${sdUrl}/sdapi/v1/txt2img`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              prompt: `collectible item for a video game, star or gem, simple 2d cartoon, white background, centered, ${characterDesc}`,
+              negative_prompt: "text, watermark, complex background, character, person",
+              width: 512, height: 512, steps: 20, cfg_scale: 7,
+            }),
+          });
+          const json = await res.json() as { images?: string[] };
+          if (json.images?.[0]) return { data: Buffer.from(json.images[0], "base64"), ext: "png" };
+        } else if (useImgApi) {
+          const resp = await client.images.generate({
+            model: imageModel,
+            prompt: `A single small collectible item for a children's video game matching this character: ${characterDesc}. Star, gem, or treat. Simple 2D, white background.`,
+            size: "1024x1024", n: 1,
+          });
+          const url = resp.data?.[0]?.url;
+          if (url) {
+            return { data: Buffer.from(await fetch(url).then(r => r.arrayBuffer())), ext: "png" };
+          }
+        }
+        return svgCollectible(characterDesc);
+      })(),
+    ]);
+
+    return { ...Object.fromEntries(poseEntries), collectible: collectibleSprite } as unknown as SpriteBuffers;
+  },
+};
+
+  async generateBackground(description: string): Promise<SpriteFile> {
+    const imageModel = process.env.LOCAL_IMAGE_MODEL ?? "";
+    const useSD      = !!process.env.LOCAL_SD_URL;
+
+    if (useSD) {
+      const sdUrl = process.env.LOCAL_SD_URL!.replace(/\/$/, "");
+      const res = await fetch(`${sdUrl}/sdapi/v1/txt2img`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: `landscape background for a children's video game, ${description}, simple 2d cartoon, colorful, no characters, no text`,
+          negative_prompt: "text, watermark, characters, people",
+          width: 768, height: 512, steps: 20, cfg_scale: 7,
+        }),
+      });
+      const json = await res.json() as { images?: string[] };
+      if (json.images?.[0]) return { data: Buffer.from(json.images[0], "base64"), ext: "png" };
+    } else if (imageModel) {
+      const baseURL = process.env.LOCAL_BASE_URL ?? "http://localhost:11434/v1";
+      const apiKey  = process.env.LOCAL_API_KEY  ?? "ollama";
+      const client  = new OpenAI({ baseURL, apiKey });
+      const resp = await client.images.generate({
+        model: imageModel,
+        prompt: `Wide landscape background for a children's video game. Scene: ${description}. Colorful, childlike art, no characters, no text.`,
+        size: "1024x1024", n: 1,
+      });
+      const url = resp.data?.[0]?.url;
+      if (url) return { data: Buffer.from(await fetch(url).then(r => r.arrayBuffer())), ext: "png" };
+    }
+
+    return svgBackground(description);
   },
 };
 

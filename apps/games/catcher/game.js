@@ -5,9 +5,9 @@ const spriteConfig = JSON.parse(localStorage.getItem("kidsproject_sprites") ?? "
 const params = new URLSearchParams(location.search);
 
 const ASSETS = {
-  character:  spriteConfig.idle       ?? params.get("idle")       ?? "assets/character_idle.png",
-  falling:    spriteConfig.action     ?? params.get("falling")    ?? "assets/collectible.png",
-  background: spriteConfig.background ?? params.get("background") ?? "assets/background.png",
+  character:  spriteConfig.idle        ?? params.get("idle")        ?? "assets/character_idle.png",
+  falling:    spriteConfig.collectible ?? params.get("falling")     ?? "assets/collectible.png",
+  background: spriteConfig.background  ?? params.get("background")  ?? "assets/background.png",
 };
 
 const SOUND_IDS = {

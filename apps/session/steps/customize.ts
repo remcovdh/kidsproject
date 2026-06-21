@@ -31,6 +31,10 @@ export function renderCustomize(
 
         <div class="sound-section">
           <h2 class="section-title">Pick your sounds</h2>
+          <div class="error-box" id="sound-notice" hidden>
+            <p class="error-box__child">Sound previews aren't working right now 🔇</p>
+            <p class="error-box__detail">Sound files are missing. Place MP3s in apps/games/catcher/assets/sounds/ named boing.mp3, splat.mp3, etc.</p>
+          </div>
           ${EVENTS.map((ev) => `
             <div class="sound-event">
               <p class="sound-event__label">${ev.label}</p>
@@ -65,7 +69,12 @@ if (caught) {
     container.querySelectorAll<HTMLButtonElement>(".sound-chip").forEach((chip) => {
       chip.addEventListener("click", () => {
         sounds[chip.dataset.event!] = chip.dataset.sound!;
-        try { new Audio(`/assets/sounds/${chip.dataset.sound}.mp3`).play(); } catch { /* autoplay blocked */ }
+        const audio = new Audio(`/games/catcher/assets/sounds/${chip.dataset.sound}.mp3`);
+        audio.addEventListener("error", () => {
+          const notice = container.querySelector<HTMLElement>("#sound-notice");
+          if (notice) notice.hidden = false;
+        });
+        audio.play().catch(() => {});
         draw();
       });
     });

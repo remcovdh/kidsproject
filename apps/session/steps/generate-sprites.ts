@@ -15,10 +15,11 @@ function saveToLocalStorage(sprites: SpriteVersion["sprites"], backgroundUrl: st
 
 function spritePoses(v: SpriteVersion): string {
   const poses: Array<[keyof SpriteVersion["sprites"], string]> = [
-    ["idle",      "Standing still"],
-    ["move",      "Moving"],
-    ["action",    "Action!"],
-    ["celebrate", "Celebrating"],
+    ["idle",        "Standing still"],
+    ["move",        "Moving"],
+    ["action",      "Action!"],
+    ["celebrate",   "Celebrating"],
+    ["collectible", "Falling item ⭐"],
   ];
   return `<div class="sprite-grid">
     ${poses.map(([key, label]) => `

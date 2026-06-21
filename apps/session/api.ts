@@ -42,10 +42,11 @@ export interface SessionConfig {
 }
 
 export interface SpritePack {
-  idle: string;
-  move: string;
-  action: string;
-  celebrate: string;
+  idle:        string;
+  move:        string;
+  action:      string;
+  celebrate:   string;
+  collectible: string;
 }
 
 export interface SpriteVersion {
@@ -137,10 +138,11 @@ export async function generateSprites(
       label,
       prompt: `Turn this child's drawing into a game character sprite pack. The character is: ${description}.`,
       sprites: {
-        idle:      svgUrl("idle",       bg),
-        move:      svgUrl("move",       "#4ECDC4"),
-        action:    svgUrl("action!",    "#F59E0B"),
-        celebrate: svgUrl("yay!",       "#A8E6CF"),
+        idle:        svgUrl("idle",       bg),
+        move:        svgUrl("move",       "#4ECDC4"),
+        action:      svgUrl("action!",    "#F59E0B"),
+        celebrate:   svgUrl("yay!",       "#A8E6CF"),
+        collectible: svgUrl("★",          "#FFE66D"),
       },
       createdAt: new Date().toISOString(),
     };
@@ -191,13 +193,28 @@ export async function fetchGallery(sessionId: string): Promise<GalleryItem[]> {
       backgroundUrl: g.backgroundUrl,
     }));
     const demoGames: GalleryItem[] = [
-      { childId: "c1", childName: "Emma",  previewUrl: svgUrl("idle", "#FF6B35"), gameType: "catcher", sprites: { idle: svgUrl("idle", "#FF6B35"), move: svgUrl("move", "#4ECDC4"), action: svgUrl("action!", "#F59E0B"), celebrate: svgUrl("yay!", "#A8E6CF") } },
-      { childId: "c2", childName: "Liam",  previewUrl: svgUrl("idle", "#4ECDC4"), gameType: "catcher", sprites: { idle: svgUrl("idle", "#4ECDC4"), move: svgUrl("move", "#FF6B35"), action: svgUrl("action!", "#A855F7"), celebrate: svgUrl("yay!", "#A8E6CF") } },
-      { childId: "c3", childName: "Sofia", previewUrl: svgUrl("idle", "#A855F7"), gameType: "catcher", sprites: { idle: svgUrl("idle", "#A855F7"), move: svgUrl("move", "#F59E0B"), action: svgUrl("action!", "#4ECDC4"), celebrate: svgUrl("yay!", "#A8E6CF") } },
+      { childId: "c1", childName: "Emma",  previewUrl: svgUrl("idle", "#FF6B35"), gameType: "catcher", sprites: { idle: svgUrl("idle", "#FF6B35"), move: svgUrl("move", "#4ECDC4"), action: svgUrl("action!", "#F59E0B"), celebrate: svgUrl("yay!", "#A8E6CF"), collectible: svgUrl("★", "#FFE66D") } },
+      { childId: "c2", childName: "Liam",  previewUrl: svgUrl("idle", "#4ECDC4"), gameType: "catcher", sprites: { idle: svgUrl("idle", "#4ECDC4"), move: svgUrl("move", "#FF6B35"), action: svgUrl("action!", "#A855F7"), celebrate: svgUrl("yay!", "#A8E6CF"), collectible: svgUrl("★", "#FFE66D") } },
+      { childId: "c3", childName: "Sofia", previewUrl: svgUrl("idle", "#A855F7"), gameType: "catcher", sprites: { idle: svgUrl("idle", "#A855F7"), move: svgUrl("move", "#F59E0B"), action: svgUrl("action!", "#4ECDC4"), celebrate: svgUrl("yay!", "#A8E6CF"), collectible: svgUrl("★", "#FFE66D") } },
     ];
     return [...userGames, ...demoGames];
   }
   return apiFetch<GalleryItem[]>(`${API}/api/sessions/${sessionId}/gallery`);
+}
+
+export async function generateBackground(
+  description: string,
+  aiProvider: string,
+): Promise<{ backgroundUrl: string }> {
+  if (MOCK_MODE) {
+    await sleep(1500);
+    return { backgroundUrl: "" };
+  }
+  return apiFetch<{ backgroundUrl: string }>(`${API}/api/ai/background`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ description, aiProvider }),
+  });
 }
 
 function fileToBase64(file: File): Promise<string> {

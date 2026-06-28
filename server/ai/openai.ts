@@ -4,12 +4,11 @@ import type { ServerAiProvider, SpriteBuffers, SpriteFile } from "./index.js";
 const POSE_PROMPTS: Record<Exclude<keyof SpriteBuffers, "collectible">, string> = {
   idle:      "standing still, relaxed, neutral upright pose, arms at sides",
   move:      "running or sliding sideways, dynamic movement, legs in mid-stride",
-  action:    "jumping high with arms outstretched, exciting action pose",
   celebrate: "cheering with both arms raised in victory, mouth open in a big smile",
 };
 
 const provider: ServerAiProvider = {
-  async generateSprites(description: string, drawingBase64: string): Promise<SpriteBuffers> {
+  async generateSprites(description: string, drawingBase64: string, styleMode?: "copy" | "restyle", artStyle?: string): Promise<SpriteBuffers> {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     // Analyze the drawing once to build a consistent character sheet
@@ -39,8 +38,11 @@ const provider: ServerAiProvider = {
       }
     }
 
-    // Generate all 4 character poses + the collectible item in parallel.
-    // The strong style-lock instruction keeps all poses looking like the same character.
+    const styleInstruction = styleMode === "copy"
+      ? "Keep the EXACT childlike art style, colors, proportions, and textures from the drawing — do not change the visual style, just pose the character differently."
+      : `Apply ${artStyle ?? "cartoon"} art style. Keep the character's shape and features from the drawing, but render in ${artStyle ?? "cartoon"} style with bold outlines and bright colors.`;
+
+    // Generate all 3 character poses + the collectible item in parallel.
     const poses = Object.entries(POSE_PROMPTS) as [Exclude<keyof SpriteBuffers, "collectible">, string][];
 
     const [poseEntries, collectibleFile] = await Promise.all([
@@ -49,9 +51,10 @@ const provider: ServerAiProvider = {
           model: "gpt-image-1",
           prompt:
             `2D video game character sprite. ` +
-            `CHARACTER (keep IDENTICAL across all poses — same colors, proportions, face, and design): ${characterSheet}. ` +
+            `CHARACTER (keep IDENTICAL across all poses — same shape, colors, face, and design): ${characterSheet}. ` +
+            `STYLE: ${styleInstruction} ` +
             `POSE: ${posePrompt}. ` +
-            `Childlike art style, bold outlines, bright colors, white background, centered, no text, square format.`,
+            `White background, centered, no text, square format.`,
           size: "1024x1024",
           quality: "medium",
           n: 1,

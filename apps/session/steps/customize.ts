@@ -21,9 +21,9 @@ function persistSoundAssignments(sounds: Record<string, string>) {
   const existing = JSON.parse(localStorage.getItem("kidsproject_sprites") ?? "{}");
   localStorage.setItem("kidsproject_sprites", JSON.stringify({
     ...existing,
-    sound_catch: sounds["catch"] ?? "boing",
-    sound_miss:  sounds["miss"]  ?? "splat",
-    sound_win:   sounds["win"]   ?? "giggle",
+    sound_catch: sounds["catch"] ?? "",
+    sound_miss:  sounds["miss"]  ?? "",
+    sound_win:   sounds["win"]   ?? "",
   }));
 }
 
@@ -63,7 +63,7 @@ export function renderCustomize(
           <pre class="code-peek" id="code-peek" hidden>// When your character catches something:
 if (caught) {
   score = score + 1;
-  playSound("${sounds["catch"] ?? "boing"}");
+  ${sounds["catch"] ? `playSound("${sounds["catch"]}");` : "// (no catch sound selected)"}
 }
 
 // Score keeps adding up — can you get 10?</pre>
@@ -71,6 +71,7 @@ if (caught) {
 
         <div class="step__actions">
           <button class="btn btn--ghost" id="back-btn">← Back</button>
+          <button class="btn btn--ghost" id="try-btn">🎮 Try it!</button>
           <button class="btn btn--primary btn--big" id="next-btn">Put it on the wall! 🚀</button>
         </div>
       </div>
@@ -94,7 +95,16 @@ if (caught) {
       const pre = container.querySelector<HTMLElement>("#code-peek")!;
       pre.hidden = !pre.hidden;
     });
-    container.querySelector("#back-btn")?.addEventListener("click", () => goToStep("preview-game"));
+
+    container.querySelector("#back-btn")?.addEventListener("click", () => {
+      goToStep("preview-game", { previewContext: "background" });
+    });
+
+    container.querySelector("#try-btn")?.addEventListener("click", () => {
+      persistSoundAssignments(sounds);
+      goToStep("preview-game", { soundAssignments: sounds, previewContext: "sounds" });
+    });
+
     container.querySelector("#next-btn")?.addEventListener("click", () => {
       goToStep("publish", { soundAssignments: sounds });
     });

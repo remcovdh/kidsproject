@@ -36,6 +36,7 @@ export interface SessionState {
   soundAssignments: Record<string, string>;
   published: boolean;
   currentStep: Step;
+  previewContext: "character" | "background" | "sounds";
 }
 
 const PROGRESS_STEPS: Step[] = [
@@ -70,6 +71,7 @@ const state: SessionState = {
   soundAssignments:     {},
   published:            false,
   currentStep:          "welcome",
+  previewContext:       "character",
 };
 
 export function goToStep(step: Step, update: Partial<SessionState> = {}) {

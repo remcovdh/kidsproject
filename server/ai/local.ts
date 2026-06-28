@@ -68,12 +68,6 @@ const POSES: Record<Exclude<keyof SpriteBuffers, "collectible">, Pose> = {
     ll: [86, 166, 62, 192],  lr: [114, 166, 140, 190],
     sm: "M 88,78 Q 100,90 112,78",
   },
-  action: {
-    by: 115, hy: 59,
-    al: [60, 107, 28, 76],   ar: [140, 107, 172, 76],
-    ll: [86, 159, 60, 184],  lr: [114, 159, 140, 184],
-    sm: "M 86,71 Q 100,86 114,71",
-  },
   celebrate: {
     by: 125, hy: 69,
     al: [60, 116, 30, 76],   ar: [140, 116, 170, 76],
@@ -148,7 +142,6 @@ function svgSprite(description: string, pose: Exclude<keyof SpriteBuffers, "coll
 const SD_POSE_PROMPTS: Record<Exclude<keyof SpriteBuffers, "collectible">, string> = {
   idle:      "standing still, relaxed, neutral pose, arms at sides",
   move:      "running, motion, dynamic, sideways",
-  action:    "jumping, arms outstretched, action pose",
   celebrate: "celebrating, arms raised in victory, happy",
 };
 
@@ -175,12 +168,11 @@ async function generateViaSD(characterDesc: string, pose: Exclude<keyof SpriteBu
 const VISION_POSE_PROMPTS: Record<Exclude<keyof SpriteBuffers, "collectible">, string> = {
   idle:      "standing still, relaxed, neutral upright pose",
   move:      "running or sliding sideways, dynamic movement",
-  action:    "jumping or attacking, exciting action pose",
   celebrate: "cheering with arms raised, joyful celebration",
 };
 
 const provider: ServerAiProvider = {
-  async generateSprites(description: string, drawingBase64: string): Promise<SpriteBuffers> {
+  async generateSprites(description: string, drawingBase64: string, styleMode?: "copy" | "restyle", artStyle?: string): Promise<SpriteBuffers> {
     const baseURL    = process.env.LOCAL_BASE_URL   ?? "http://localhost:11434/v1";
     const apiKey     = process.env.LOCAL_API_KEY    ?? "ollama";
     const chatModel  = process.env.LOCAL_CHAT_MODEL ?? "gemma4:12b";
@@ -225,10 +217,14 @@ const provider: ServerAiProvider = {
         if (useSD) {
           sprite = await generateViaSD(characterDesc, pose);
         } else if (useImgApi) {
+          const styleClause = styleMode === "copy"
+            ? "Keep the exact childlike art style and colors from the drawing."
+            : `Apply ${artStyle ?? "cartoon"} art style with bold outlines and bright colors.`;
           const prompt =
             `Simple 2D game character sprite. CHARACTER (keep identical across all poses): ${characterDesc}. ` +
+            `${styleClause} ` +
             `Pose: ${VISION_POSE_PROMPTS[pose]}. ` +
-            `Childlike art, bold outlines, bright colors, white background, centered, no text.`;
+            `White background, centered, no text.`;
           const resp = await client.images.generate({ model: imageModel, prompt, size: "1024x1024", n: 1 });
           const url  = resp.data?.[0]?.url;
           if (!url) throw new Error(`No image URL returned for pose: ${pose}`);

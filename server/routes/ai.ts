@@ -13,8 +13,9 @@ export const aiRouter = Router();
 // Body: { childId, description, drawingBase64 }
 // Returns: { id, label, prompt, sprites, createdAt }
 aiRouter.post("/sprites", async (req, res) => {
-  const { childId, description, drawingBase64 = "" } = req.body as {
+  const { childId, description, drawingBase64 = "", styleMode, artStyle } = req.body as {
     childId?: string; description?: string; drawingBase64?: string;
+    styleMode?: "copy" | "restyle"; artStyle?: string;
   };
 
   if (!childId || !description) {
@@ -38,7 +39,7 @@ aiRouter.post("/sprites", async (req, res) => {
 
   try {
     const provider  = await getServerProvider(row.ai_provider);
-    const buffers   = await provider.generateSprites(description, drawingBase64);
+    const buffers   = await provider.generateSprites(description, drawingBase64, styleMode, artStyle);
 
     const versionId = uuid();
     const spriteDir = join(UPLOAD_DIR, "sprites", versionId);
@@ -55,7 +56,8 @@ aiRouter.post("/sprites", async (req, res) => {
       "SELECT COUNT(*) as n FROM sprite_versions WHERE child_id = ?"
     ).get(childId) as { n: number };
     const label  = VERSION_LABELS[n] ?? `Try ${n + 1}`;
-    const prompt = `Character: ${description}. Poses: idle, move, action, celebrate.`;
+    const styleDesc = styleMode === "copy" ? "copy drawing style" : (artStyle ?? "cartoon");
+    const prompt = `Character: ${description}. Style: ${styleDesc}. Poses: idle, move, celebrate.`;
 
     db.prepare(
       "INSERT INTO sprite_versions (id, child_id, label, prompt, sprites) VALUES (?, ?, ?, ?, ?)"

@@ -114,7 +114,9 @@ export function renderUploadBackground(
         errorBox.hidden = true;
         try {
           const result = await uploadDrawing(selectedFile);
-          goToStep("customize", { backgroundUrl: result.drawingUrl });
+          const existing = JSON.parse(localStorage.getItem("kidsproject_sprites") ?? "{}");
+          localStorage.setItem("kidsproject_sprites", JSON.stringify({ ...existing, background: result.drawingUrl }));
+          goToStep("preview-game", { backgroundUrl: result.drawingUrl, previewContext: "background" });
         } catch (err) {
           console.error("[upload-background]", err);
           nextBtn.disabled = false;
@@ -295,7 +297,9 @@ export function renderUploadBackground(
       });
 
       useBtn.addEventListener("click", () => {
-        goToStep("customize", { backgroundUrl: generatedUrl || null });
+        const existing = JSON.parse(localStorage.getItem("kidsproject_sprites") ?? "{}");
+        localStorage.setItem("kidsproject_sprites", JSON.stringify({ ...existing, background: generatedUrl || undefined }));
+        goToStep("preview-game", { backgroundUrl: generatedUrl || null, previewContext: "background" });
       });
     }
   }

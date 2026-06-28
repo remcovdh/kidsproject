@@ -7,15 +7,14 @@ const params = new URLSearchParams(location.search);
 const ASSETS = {
   character_idle:      spriteConfig.idle        ?? params.get("idle")        ?? "assets/character_idle.png",
   character_move:      spriteConfig.move        ?? params.get("move")        ?? "assets/character_idle.png",
-  character_action:    spriteConfig.action      ?? params.get("action")      ?? "assets/character_idle.png",
   character_celebrate: spriteConfig.celebrate   ?? params.get("celebrate")   ?? "assets/character_idle.png",
   falling:             spriteConfig.collectible ?? params.get("falling")     ?? "assets/collectible.png",
   background:          spriteConfig.background  ?? params.get("background")  ?? "assets/background.png",
 };
 
 const SOUND_IDS = {
-  catch: spriteConfig.sound_catch ?? params.get("sound_catch") ?? "boing",
-  miss:  spriteConfig.sound_miss  ?? params.get("sound_miss")  ?? "splat",
+  catch: spriteConfig.sound_catch ?? params.get("sound_catch") ?? "",
+  miss:  spriteConfig.sound_miss  ?? params.get("sound_miss")  ?? "",
 };
 
 const canvas   = document.getElementById("game");
@@ -73,6 +72,7 @@ function getAudio(id) {
 }
 
 function playSound(id) {
+  if (!id) return;
   const audio = getAudio(id);
   try { audio.currentTime = 0; } catch { /* not loaded yet, fine */ }
   audio.play().catch(() => { /* blocked until the player interacts once, see unlockAudio() */ });
@@ -82,7 +82,7 @@ function playSound(id) {
 // gesture. requestAnimationFrame-driven playSound() calls don't count as
 // one, so "warm up" playback once on the first keypress/tap.
 function unlockAudio() {
-  [SOUND_IDS.catch, SOUND_IDS.miss].forEach((id) => {
+  [SOUND_IDS.catch, SOUND_IDS.miss].filter(Boolean).forEach((id) => {
     const audio = getAudio(id);
     audio.play().then(() => audio.pause()).catch(() => {});
   });
@@ -157,7 +157,7 @@ function update() {
     } else if (f.y > H) {
       state.fallers.splice(i, 1);
       state.lives--;
-      state.pose      = "action";
+      state.pose      = "move";
       state.poseTimer = POSE_FRAMES;
       playSound(SOUND_IDS.miss);
       if (state.lives <= 0) showGameOver();
@@ -282,7 +282,6 @@ replayBtn.addEventListener("click", () => restartGame());
 Promise.all([
   loadImage("character_idle",      ASSETS.character_idle),
   loadImage("character_move",      ASSETS.character_move),
-  loadImage("character_action",    ASSETS.character_action),
   loadImage("character_celebrate", ASSETS.character_celebrate),
   loadImage("falling",             ASSETS.falling),
   loadImage("background",          ASSETS.background),

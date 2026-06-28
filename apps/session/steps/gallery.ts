@@ -36,9 +36,9 @@ export function renderGallery(
     localStorage.setItem("kidsproject_sprites", JSON.stringify({
       ...item.sprites,
       ...(item.backgroundUrl ? { background: item.backgroundUrl } : {}),
-      sound_catch: item.sounds?.["catch"] ?? "boing",
-      sound_miss:  item.sounds?.["miss"]  ?? "splat",
-      sound_win:   item.sounds?.["win"]   ?? "giggle",
+      sound_catch: item.sounds?.["catch"] ?? "",
+      sound_miss:  item.sounds?.["miss"]  ?? "",
+      sound_win:   item.sounds?.["win"]   ?? "",
     }));
     modalTitle.textContent = `${item.childName}'s game`;
     modalFrame.src = `/games/${item.gameType}/`;

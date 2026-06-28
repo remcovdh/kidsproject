@@ -6,13 +6,12 @@ export interface SpriteFile {
 export interface SpriteBuffers {
   idle:        SpriteFile;
   move:        SpriteFile;
-  action:      SpriteFile;
   celebrate:   SpriteFile;
   collectible: SpriteFile; // the item that falls in the catcher game
 }
 
 export interface ServerAiProvider {
-  generateSprites(description: string, drawingBase64: string): Promise<SpriteBuffers>;
+  generateSprites(description: string, drawingBase64: string, styleMode?: "copy" | "restyle", artStyle?: string): Promise<SpriteBuffers>;
   generateBackground?(description: string, imageBase64?: string, styleDescription?: string): Promise<SpriteFile>;
 }
 

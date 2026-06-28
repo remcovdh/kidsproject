@@ -44,7 +44,6 @@ export interface SessionConfig {
 export interface SpritePack {
   idle:        string;
   move:        string;
-  action:      string;
   celebrate:   string;
   collectible: string;
 }
@@ -127,7 +126,9 @@ export async function checkModeration(text: string): Promise<{ allowed: boolean 
 export async function generateSprites(
   childId: string,
   description: string,
-  _drawingBase64: string
+  _drawingBase64: string,
+  styleMode: "copy" | "restyle" = "copy",
+  artStyle = "",
 ): Promise<SpriteVersion> {
   if (MOCK_MODE) {
     await sleep(2800);
@@ -138,13 +139,12 @@ export async function generateSprites(
     return {
       id: `v${_versionCount}_${Date.now()}`,
       label,
-      prompt: `Turn this child's drawing into a game character sprite pack. The character is: ${description}.`,
+      prompt: `Character: ${description}. Style: ${styleMode === "copy" ? "copy drawing style" : artStyle || "cartoon"}.`,
       sprites: {
-        idle:        svgUrl("idle",       bg),
-        move:        svgUrl("move",       "#4ECDC4"),
-        action:      svgUrl("action!",    "#F59E0B"),
-        celebrate:   svgUrl("yay!",       "#A8E6CF"),
-        collectible: svgUrl("★",          "#FFE66D"),
+        idle:        svgUrl("idle",  bg),
+        move:        svgUrl("move",  "#4ECDC4"),
+        celebrate:   svgUrl("yay!", "#A8E6CF"),
+        collectible: svgUrl("★",    "#FFE66D"),
       },
       createdAt: new Date().toISOString(),
     };
@@ -152,7 +152,7 @@ export async function generateSprites(
   return apiFetch<SpriteVersion>(`${API}/api/ai/sprites`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ childId, description, drawingBase64: _drawingBase64 }),
+    body: JSON.stringify({ childId, description, drawingBase64: _drawingBase64, styleMode, artStyle }),
   });
 }
 
@@ -197,9 +197,9 @@ export async function fetchGallery(sessionId: string): Promise<GalleryItem[]> {
       sounds:       g.sounds,
     }));
     const demoGames: GalleryItem[] = [
-      { childId: "c1", childName: "Emma",  previewUrl: svgUrl("idle", "#FF6B35"), gameType: "catcher", sprites: { idle: svgUrl("idle", "#FF6B35"), move: svgUrl("move", "#4ECDC4"), action: svgUrl("action!", "#F59E0B"), celebrate: svgUrl("yay!", "#A8E6CF"), collectible: svgUrl("★", "#FFE66D") } },
-      { childId: "c2", childName: "Liam",  previewUrl: svgUrl("idle", "#4ECDC4"), gameType: "catcher", sprites: { idle: svgUrl("idle", "#4ECDC4"), move: svgUrl("move", "#FF6B35"), action: svgUrl("action!", "#A855F7"), celebrate: svgUrl("yay!", "#A8E6CF"), collectible: svgUrl("★", "#FFE66D") } },
-      { childId: "c3", childName: "Sofia", previewUrl: svgUrl("idle", "#A855F7"), gameType: "catcher", sprites: { idle: svgUrl("idle", "#A855F7"), move: svgUrl("move", "#F59E0B"), action: svgUrl("action!", "#4ECDC4"), celebrate: svgUrl("yay!", "#A8E6CF"), collectible: svgUrl("★", "#FFE66D") } },
+      { childId: "c1", childName: "Emma",  previewUrl: svgUrl("idle", "#FF6B35"), gameType: "catcher", sprites: { idle: svgUrl("idle", "#FF6B35"), move: svgUrl("move", "#4ECDC4"), celebrate: svgUrl("yay!", "#A8E6CF"), collectible: svgUrl("★", "#FFE66D") } },
+      { childId: "c2", childName: "Liam",  previewUrl: svgUrl("idle", "#4ECDC4"), gameType: "catcher", sprites: { idle: svgUrl("idle", "#4ECDC4"), move: svgUrl("move", "#FF6B35"), celebrate: svgUrl("yay!", "#A8E6CF"), collectible: svgUrl("★", "#FFE66D") } },
+      { childId: "c3", childName: "Sofia", previewUrl: svgUrl("idle", "#A855F7"), gameType: "catcher", sprites: { idle: svgUrl("idle", "#A855F7"), move: svgUrl("move", "#F59E0B"), celebrate: svgUrl("yay!", "#A8E6CF"), collectible: svgUrl("★", "#FFE66D") } },
     ];
     return [...userGames, ...demoGames];
   }

@@ -2,11 +2,13 @@ import type { SessionState, Step } from "../main.js";
 import { registerChild } from "../api.js";
 
 const STEPS = [
-  { emoji: "✏️", label: "Draw",    desc: "Draw your character on paper" },
-  { emoji: "📸", label: "Photo",   desc: "Take a photo of your drawing" },
-  { emoji: "🤖", label: "AI",      desc: "AI turns it into a game character" },
-  { emoji: "🎮", label: "Play!",   desc: "Play your very own game" },
-  { emoji: "🚀", label: "Share!",  desc: "Put it on the wall for everyone" },
+  { emoji: "✏️", label: "Draw",       desc: "Draw your character on paper" },
+  { emoji: "📸", label: "Photo",      desc: "Take a photo of your drawing" },
+  { emoji: "🤖", label: "AI magic",   desc: "AI turns it into a game character" },
+  { emoji: "🎮", label: "Play!",      desc: "Play your very own game" },
+  { emoji: "🌄", label: "Background", desc: "Add a cool background world" },
+  { emoji: "🔊", label: "Sounds",     desc: "Pick fun sounds for your game" },
+  { emoji: "🚀", label: "Share!",     desc: "Put it on the wall for everyone" },
 ];
 
 export function renderWelcome(
@@ -14,11 +16,8 @@ export function renderWelcome(
   state: SessionState,
   goToStep: (step: Step, update?: Partial<SessionState>) => void
 ) {
-  const sessionName = state.sessionConfig?.name ?? "AI Workshop";
-
   container.innerHTML = `
     <div class="step step--welcome">
-      <p class="welcome-session">${sessionName}</p>
       <h1 class="welcome-title">AI GAME MAKER</h1>
       <p class="welcome-tagline">Turn your drawing into a real game — with help from AI!</p>
 

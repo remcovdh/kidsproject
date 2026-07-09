@@ -51,9 +51,10 @@ const provider: ServerAiProvider = {
             `CHARACTER (keep IDENTICAL across all poses — same shape, colors, face, and design): ${characterSheet}. ` +
             `STYLE: ${styleInstruction} ` +
             `POSE: ${posePrompt}. ` +
-            `White background, centered, no text, square format.`,
+            `Transparent background, centered, no text, square format, PNG.`,
           size: "1024x1024",
           quality: "medium",
+          background: "transparent",
           n: 1,
         });
         const b64 = response.data?.[0]?.b64_json;
@@ -68,9 +69,10 @@ const provider: ServerAiProvider = {
             `A single small collectible item for a children's video game. ` +
             `It should be something that thematically matches this character: ${characterSheet}. ` +
             `Examples: a glowing gem, a golden star, a treat, a magical orb. ` +
-            `Simple 2D, bright cheerful colors, white background, centered, no text.`,
+            `Simple 2D, bright cheerful colors, transparent background, centered, no text, PNG.`,
           size: "1024x1024",
           quality: "medium",
+          background: "transparent",
           n: 1,
         });
         const b64 = response.data?.[0]?.b64_json;

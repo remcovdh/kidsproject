@@ -79,7 +79,6 @@ const POSES: Record<Exclude<keyof SpriteBuffers, "collectible">, Pose> = {
 function svgCollectible(description: string): SpriteFile {
   const [fill, dark] = pickColor(description);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
-  <rect width="200" height="200" fill="white"/>
   <polygon points="100,18 120,74 180,74 132,110 150,166 100,132 50,166 68,110 20,74 80,74"
     fill="${fill}" stroke="${dark}" stroke-width="4" stroke-linejoin="round"/>
   <circle cx="100" cy="100" r="20" fill="white" opacity="0.4"/>
@@ -119,7 +118,6 @@ function svgSprite(description: string, pose: Exclude<keyof SpriteBuffers, "coll
   const [fill, dark] = pickColor(description);
   const p = POSES[pose];
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
-  <rect width="200" height="200" fill="white"/>
   <line x1="${p.al[0]}" y1="${p.al[1]}" x2="${p.al[2]}" y2="${p.al[3]}" stroke="${dark}" stroke-width="9" stroke-linecap="round"/>
   <line x1="${p.ar[0]}" y1="${p.ar[1]}" x2="${p.ar[2]}" y2="${p.ar[3]}" stroke="${dark}" stroke-width="9" stroke-linecap="round"/>
   <ellipse cx="100" cy="${p.by}" rx="42" ry="50" fill="${fill}" stroke="${dark}" stroke-width="3"/>
@@ -148,8 +146,8 @@ const SD_POSE_PROMPTS: Record<Exclude<keyof SpriteBuffers, "collectible">, strin
 async function generateViaSD(characterDesc: string, pose: Exclude<keyof SpriteBuffers, "collectible">): Promise<SpriteFile> {
   const sdUrl = process.env.LOCAL_SD_URL!.replace(/\/$/, "");
   const body  = {
-    prompt: `game character sprite, ${characterDesc}, ${SD_POSE_PROMPTS[pose]}, simple 2d cartoon, white background, centered, no text, no watermark`,
-    negative_prompt: "text, watermark, signature, complex background, realistic, photographic",
+    prompt: `game character sprite, ${characterDesc}, ${SD_POSE_PROMPTS[pose]}, simple 2d cartoon, transparent background, centered, no text, no watermark`,
+    negative_prompt: "text, watermark, signature, background, realistic, photographic",
     width: 512, height: 512, steps: 20, cfg_scale: 7,
   };
   const res = await fetch(`${sdUrl}/sdapi/v1/txt2img`, {
@@ -224,7 +222,7 @@ const provider: ServerAiProvider = {
             `Simple 2D game character sprite. CHARACTER (keep identical across all poses): ${characterDesc}. ` +
             `${styleClause} ` +
             `Pose: ${VISION_POSE_PROMPTS[pose]}. ` +
-            `White background, centered, no text.`;
+            `Transparent background, centered, no text, PNG.`;
           const resp = await client.images.generate({ model: imageModel, prompt, size: "1024x1024", n: 1 });
           const url  = resp.data?.[0]?.url;
           if (!url) throw new Error(`No image URL returned for pose: ${pose}`);
@@ -242,8 +240,8 @@ const provider: ServerAiProvider = {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              prompt: `collectible item for a video game, star or gem, simple 2d cartoon, white background, centered, ${characterDesc}`,
-              negative_prompt: "text, watermark, complex background, character, person",
+              prompt: `collectible item for a video game, star or gem, simple 2d cartoon, transparent background, centered, ${characterDesc}`,
+              negative_prompt: "text, watermark, background, character, person",
               width: 512, height: 512, steps: 20, cfg_scale: 7,
             }),
           });
@@ -252,7 +250,7 @@ const provider: ServerAiProvider = {
         } else if (useImgApi) {
           const resp = await client.images.generate({
             model: imageModel,
-            prompt: `A single small collectible item for a children's video game matching this character: ${characterDesc}. Star, gem, or treat. Simple 2D, white background.`,
+            prompt: `A single small collectible item for a children's video game matching this character: ${characterDesc}. Star, gem, or treat. Simple 2D, transparent background, PNG.`,
             size: "1024x1024", n: 1,
           });
           const url = resp.data?.[0]?.url;

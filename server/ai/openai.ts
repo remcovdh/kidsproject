@@ -8,12 +8,15 @@ const POSE_PROMPTS: Record<Exclude<keyof SpriteBuffers, "collectible">, string> 
 };
 
 const provider: ServerAiProvider = {
-  async generateSprites(description: string, drawingBase64: string, styleMode?: "copy" | "restyle", artStyle?: string): Promise<SpriteBuffers> {
+  async generateSprites(description: string, drawingBase64: string, styleMode?: "shape" | "copy", artStyle?: string): Promise<SpriteBuffers> {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    // Analyze the drawing once to build a consistent character sheet
+    // Analyze the drawing — focus varies by mode
     let characterSheet = description;
     if (drawingBase64) {
+      const visionPrompt = styleMode === "copy"
+        ? `A child drew this game character. Write a short CHARACTER SHEET: list the exact colors, body shape, face features, and any distinctive details (wings, hat, tail, etc.). Be specific so an illustrator could recreate it identically — including the rough childlike style and coloring. The child calls it: "${description}".`
+        : `A child drew this game character. Describe its SHAPE and STRUCTURE only: body proportions, silhouette, number of limbs, and distinctive physical features (wings, hat, tail, ears, horns, etc.). Do NOT mention colors or art style — focus purely on shape so an illustrator could recreate the form. The child calls it: "${description}".`;
       try {
         const analysis = await client.chat.completions.create({
           model: "gpt-4o",
@@ -21,14 +24,8 @@ const provider: ServerAiProvider = {
           messages: [{
             role: "user",
             content: [
-              {
-                type: "text",
-                text: `A child drew this game character. Write a short CHARACTER SHEET: list the exact colors, body shape, face features, and any distinctive details (wings, hat, tail, etc.). Be specific so an illustrator could recreate it identically from your description. The child calls it: "${description}".`,
-              },
-              {
-                type: "image_url",
-                image_url: { url: `data:image/jpeg;base64,${drawingBase64}`, detail: "low" },
-              },
+              { type: "text", text: visionPrompt },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${drawingBase64}`, detail: "low" } },
             ],
           }],
         });
@@ -39,8 +36,8 @@ const provider: ServerAiProvider = {
     }
 
     const styleInstruction = styleMode === "copy"
-      ? "Keep the EXACT childlike art style, colors, proportions, and textures from the drawing — do not change the visual style, just pose the character differently."
-      : `Apply ${artStyle ?? "cartoon"} art style. Keep the character's shape and features from the drawing, but render in ${artStyle ?? "cartoon"} style with bold outlines and bright colors.`;
+      ? "Preserve the EXACT childlike art style, rough hand-drawn quality, and original colors from the drawing. Do not clean up or professionalize the look — keep it looking like the child's own style."
+      : `Render as a clean ${artStyle ?? "cartoon"} game sprite. Use the character's SHAPE and distinctive features from the drawing, but apply a fresh ${artStyle ?? "cartoon"} art style with bold outlines and bright colors. Do NOT copy the drawing's coloring or rough style.`;
 
     // Generate all 3 character poses + the collectible item in parallel.
     const poses = Object.entries(POSE_PROMPTS) as [Exclude<keyof SpriteBuffers, "collectible">, string][];

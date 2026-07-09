@@ -74,8 +74,10 @@ export function renderGenerateSprites(
 
   type Phase = "pick-style" | "loading" | "result";
   let phase: Phase = "pick-style";
-  let styleMode: "copy" | "restyle" = "copy";
-  let artStyle = "";
+  // "shape" = extract shape from drawing, apply chosen game-art style (default)
+  // "copy"  = also copy the drawing's exact colors and rough style
+  let styleMode: "shape" | "copy" = "shape";
+  let artStyle = "cartoon"; // pre-selected default
   let versions = [...state.spriteVersions];
   let currentVersion: SpriteVersion | null = null;
 
@@ -86,7 +88,6 @@ export function renderGenerateSprites(
   }
 
   function renderStylePicker() {
-    const generateEnabled = styleMode === "copy" || (styleMode === "restyle" && !!artStyle);
     const drawingThumb = state.drawingUrl
       ? `<div class="drawing-source">
            <p class="drawing-source__label">Your drawing:</p>
@@ -97,23 +98,23 @@ export function renderGenerateSprites(
       <div class="step step--generate">
         <h1 class="step__title">How should it look? 🎨</h1>
         ${drawingThumb}
-        <p class="step__subtitle">Should the AI copy your drawing style, or give your character a brand new look?</p>
+        <p class="step__subtitle">The AI will use the shape of your drawing. Pick how it should look!</p>
 
         <div class="style-picker">
-          <button class="style-option ${styleMode === "copy" ? "style-option--active" : ""}" id="style-copy">
-            <div class="style-option__icon">📸</div>
-            <p class="style-option__name">Copy my style</p>
-            <p class="style-option__desc">Keep the exact look of my drawing</p>
+          <button class="style-option ${styleMode === "shape" ? "style-option--active" : ""}" id="style-shape">
+            <div class="style-option__icon">🎮</div>
+            <p class="style-option__name">Game character</p>
+            <p class="style-option__desc">AI uses your shape and makes a clean game sprite</p>
           </button>
-          <button class="style-option ${styleMode === "restyle" ? "style-option--active" : ""}" id="style-restyle">
-            <div class="style-option__icon">✨</div>
-            <p class="style-option__name">New style!</p>
-            <p class="style-option__desc">Pick a totally different look</p>
+          <button class="style-option ${styleMode === "copy" ? "style-option--active" : ""}" id="style-copy">
+            <div class="style-option__icon">✏️</div>
+            <p class="style-option__name">Keep my style</p>
+            <p class="style-option__desc">AI also copies my drawing's colors and look</p>
           </button>
         </div>
 
-        <div id="art-style-picker" ${styleMode !== "restyle" ? "hidden" : ""} style="width:100%;text-align:left">
-          <p class="describe-label" style="margin-bottom:.5rem">Pick a style:</p>
+        <div id="art-style-picker" ${styleMode !== "shape" ? "hidden" : ""} style="width:100%;text-align:left">
+          <p class="describe-label" style="margin-bottom:.5rem">Pick a look:</p>
           <div class="chip-group">
             ${ART_STYLES.map((s) => `
               <button class="chip ${artStyle === s.id ? "chip--active" : ""}" data-style="${s.id}">
@@ -123,17 +124,17 @@ export function renderGenerateSprites(
           </div>
         </div>
 
-        <button class="btn btn--primary btn--big" id="generate-btn" ${generateEnabled ? "" : "disabled"}>
+        <button class="btn btn--primary btn--big" id="generate-btn">
           Create it! ✨
         </button>
       </div>
     `;
 
+    container.querySelector("#style-shape")?.addEventListener("click", () => {
+      styleMode = "shape"; if (!artStyle) artStyle = "cartoon"; draw();
+    });
     container.querySelector("#style-copy")?.addEventListener("click", () => {
       styleMode = "copy"; artStyle = ""; draw();
-    });
-    container.querySelector("#style-restyle")?.addEventListener("click", () => {
-      styleMode = "restyle"; draw();
     });
     container.querySelectorAll<HTMLButtonElement>("[data-style]").forEach((chip) => {
       chip.addEventListener("click", () => { artStyle = chip.dataset.style!; draw(); });
@@ -146,7 +147,7 @@ export function renderGenerateSprites(
   function renderLoading() {
     const styleLabel = styleMode === "copy"
       ? "Copy the exact childlike style and colors from the drawing."
-      : `Apply ${artStyle} art style to the character's shape.`;
+      : `Use the character's shape from the drawing and apply ${artStyle} art style.`;
     const prompt = `Turn this child's drawing into a game character sprite pack. The character is: ${desc}. ${styleLabel} Create 3 poses: idle, move, celebrate.`;
 
     container.innerHTML = `

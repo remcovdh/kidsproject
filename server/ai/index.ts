@@ -11,7 +11,7 @@ export interface SpriteBuffers {
 }
 
 export interface ServerAiProvider {
-  generateSprites(description: string, drawingBase64: string, styleMode?: "copy" | "restyle", artStyle?: string): Promise<SpriteBuffers>;
+  generateSprites(description: string, drawingBase64: string, styleMode?: "shape" | "copy", artStyle?: string): Promise<SpriteBuffers>;
   generateBackground?(description: string, imageBase64?: string, styleDescription?: string): Promise<SpriteFile>;
 }
 

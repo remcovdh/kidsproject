@@ -172,7 +172,7 @@ const VISION_POSE_PROMPTS: Record<Exclude<keyof SpriteBuffers, "collectible">, s
 };
 
 const provider: ServerAiProvider = {
-  async generateSprites(description: string, drawingBase64: string, styleMode?: "copy" | "restyle", artStyle?: string): Promise<SpriteBuffers> {
+  async generateSprites(description: string, drawingBase64: string, styleMode?: "shape" | "copy", artStyle?: string): Promise<SpriteBuffers> {
     const baseURL    = process.env.LOCAL_BASE_URL   ?? "http://localhost:11434/v1";
     const apiKey     = process.env.LOCAL_API_KEY    ?? "ollama";
     const chatModel  = process.env.LOCAL_CHAT_MODEL ?? "gemma4:12b";
@@ -218,8 +218,8 @@ const provider: ServerAiProvider = {
           sprite = await generateViaSD(characterDesc, pose);
         } else if (useImgApi) {
           const styleClause = styleMode === "copy"
-            ? "Keep the exact childlike art style and colors from the drawing."
-            : `Apply ${artStyle ?? "cartoon"} art style with bold outlines and bright colors.`;
+            ? "Preserve the exact childlike art style, rough hand-drawn quality, and original colors from the drawing."
+            : `Use the character's shape from the drawing. Apply ${artStyle ?? "cartoon"} art style with bold outlines and bright colors. Do not copy the drawing's coloring or rough style.`;
           const prompt =
             `Simple 2D game character sprite. CHARACTER (keep identical across all poses): ${characterDesc}. ` +
             `${styleClause} ` +

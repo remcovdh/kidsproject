@@ -15,7 +15,7 @@ export const aiRouter = Router();
 aiRouter.post("/sprites", async (req, res) => {
   const { childId, description, drawingBase64 = "", styleMode, artStyle } = req.body as {
     childId?: string; description?: string; drawingBase64?: string;
-    styleMode?: "copy" | "restyle"; artStyle?: string;
+    styleMode?: "shape" | "copy"; artStyle?: string;
   };
 
   if (!childId || !description) {
@@ -56,7 +56,7 @@ aiRouter.post("/sprites", async (req, res) => {
       "SELECT COUNT(*) as n FROM sprite_versions WHERE child_id = ?"
     ).get(childId) as { n: number };
     const label  = VERSION_LABELS[n] ?? `Try ${n + 1}`;
-    const styleDesc = styleMode === "copy" ? "copy drawing style" : (artStyle ?? "cartoon");
+    const styleDesc = styleMode === "copy" ? "copy drawing style" : `${artStyle ?? "cartoon"} (shape only)`;
     const prompt = `Character: ${description}. Style: ${styleDesc}. Poses: idle, move, celebrate.`;
 
     db.prepare(

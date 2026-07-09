@@ -127,8 +127,8 @@ export async function generateSprites(
   childId: string,
   description: string,
   _drawingBase64: string,
-  styleMode: "copy" | "restyle" = "copy",
-  artStyle = "",
+  styleMode: "shape" | "copy" = "shape",
+  artStyle = "cartoon",
 ): Promise<SpriteVersion> {
   if (MOCK_MODE) {
     await sleep(2800);
@@ -139,7 +139,7 @@ export async function generateSprites(
     return {
       id: `v${_versionCount}_${Date.now()}`,
       label,
-      prompt: `Character: ${description}. Style: ${styleMode === "copy" ? "copy drawing style" : artStyle || "cartoon"}.`,
+      prompt: `Character: ${description}. Style: ${styleMode === "copy" ? "copy drawing style" : artStyle}.`,
       sprites: {
         idle:        svgUrl("idle",  bg),
         move:        svgUrl("move",  "#4ECDC4"),

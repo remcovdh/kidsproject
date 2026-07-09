@@ -8,8 +8,21 @@ export function renderUploadDrawing(
 ) {
   container.innerHTML = `
     <div class="step">
-      <h1 class="step__title">Show us your drawing! 📸</h1>
-      <p class="step__subtitle">Take a photo of your drawing on paper.</p>
+      <h1 class="step__title">Draw your character! ✏️</h1>
+
+      <div class="explain-cards">
+        <div class="explain-card">
+          <div class="explain-card__emoji">✏️</div>
+          <p class="explain-card__text">Draw <strong>any character</strong> you like on paper — a monster, animal, superhero, anything!</p>
+        </div>
+        <div class="explain-card explain-card--arrow">→</div>
+        <div class="explain-card">
+          <div class="explain-card__emoji">🎮</div>
+          <p class="explain-card__text">Your drawing becomes the <strong>main character</strong> in your very own game!</p>
+        </div>
+      </div>
+
+      <p class="step__subtitle">When your drawing is ready, take a photo of it 📸</p>
 
       <label class="upload-area" id="upload-area">
         <div class="upload-area__icon">📷</div>
@@ -31,14 +44,14 @@ export function renderUploadDrawing(
     </div>
   `;
 
-  const fileInput  = container.querySelector<HTMLInputElement>("#file-input")!;
-  const preview    = container.querySelector<HTMLElement>("#drawing-preview")!;
-  const previewImg = container.querySelector<HTMLImageElement>("#preview-img")!;
-  const retakeBtn  = container.querySelector<HTMLButtonElement>("#retake-btn")!;
-  const nextBtn    = container.querySelector<HTMLButtonElement>("#next-btn")!;
-  const errorBox   = container.querySelector<HTMLElement>("#error-box")!;
+  const fileInput   = container.querySelector<HTMLInputElement>("#file-input")!;
+  const preview     = container.querySelector<HTMLElement>("#drawing-preview")!;
+  const previewImg  = container.querySelector<HTMLImageElement>("#preview-img")!;
+  const retakeBtn   = container.querySelector<HTMLButtonElement>("#retake-btn")!;
+  const nextBtn     = container.querySelector<HTMLButtonElement>("#next-btn")!;
+  const errorBox    = container.querySelector<HTMLElement>("#error-box")!;
   const errorDetail = container.querySelector<HTMLElement>("#error-detail")!;
-  const uploadArea = container.querySelector<HTMLElement>("#upload-area")!;
+  const uploadArea  = container.querySelector<HTMLElement>("#upload-area")!;
   let selectedFile: File | null = null;
 
   fileInput.addEventListener("change", () => {

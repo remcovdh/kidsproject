@@ -157,9 +157,8 @@ export function renderUploadBackground(
                 <p class="upload-area__text" style="font-size:.9rem">Tap to add a photo</p>
                 <input type="file" id="inspiration-input" accept="image/*" capture="environment" hidden />
               </label>
-              <div id="inspiration-preview" hidden style="display:flex;align-items:center;gap:.75rem;margin-top:.5rem">
-                <img id="inspiration-img" src="" alt="Inspiration"
-                  style="height:72px;border-radius:var(--radius);object-fit:cover" />
+              <div id="inspiration-preview" hidden style="display:flex;flex-direction:column;align-items:center;gap:.5rem;margin-top:.5rem">
+                <img id="inspiration-img" src="" alt="Inspiration" class="drawing-source__img" />
                 <button class="btn btn--ghost btn--small" id="remove-inspiration-btn">Remove ✕</button>
               </div>
             </div>

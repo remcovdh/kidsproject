@@ -197,6 +197,15 @@ kbd {
 }
 .sentence-preview__text { font-size: 1.2rem; font-weight: 700; color: var(--text); }
 
+/* ── Drawing source (shown in style picker) ──────────────────────────────── */
+.drawing-source { display: flex; flex-direction: column; align-items: center; gap: .4rem; width: 100%; }
+.drawing-source__label { font-size: .85rem; font-weight: 700; color: var(--muted); }
+.drawing-source__img {
+  max-width: 100%; max-height: 480px;
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  object-fit: contain;
+}
+
 /* ── Style picker (generate-sprites) ─────────────────────────────────────── */
 .style-picker {
   display: grid; grid-template-columns: 1fr 1fr;

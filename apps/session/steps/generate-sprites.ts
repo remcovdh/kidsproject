@@ -87,9 +87,16 @@ export function renderGenerateSprites(
 
   function renderStylePicker() {
     const generateEnabled = styleMode === "copy" || (styleMode === "restyle" && !!artStyle);
+    const drawingThumb = state.drawingUrl
+      ? `<div class="drawing-source">
+           <p class="drawing-source__label">Your drawing:</p>
+           <img src="${state.drawingUrl}" alt="Your drawing" class="drawing-source__img" />
+         </div>`
+      : "";
     container.innerHTML = `
       <div class="step step--generate">
         <h1 class="step__title">How should it look? 🎨</h1>
+        ${drawingThumb}
         <p class="step__subtitle">Should the AI copy your drawing style, or give your character a brand new look?</p>
 
         <div class="style-picker">

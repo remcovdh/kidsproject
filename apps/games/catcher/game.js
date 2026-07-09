@@ -30,12 +30,12 @@ const CATCHER_H   = 80;
 const CATCHER_SPD = 8;
 const POSE_FRAMES = 45; // ~0.75s at 60fps for temporary pose
 
-// Difficulty ramps every FRAMES_PER_LEVEL frames (~15 s at 60 fps).
-// Fall speed goes 2 → 3 → 4 … capped at 14.
-// Spawn interval goes 150 → 120 → 90 … capped at 36 (one item ~every 0.6 s).
-const FRAMES_PER_LEVEL = 900;
-const BASE_SPEED  = 2;
-const BASE_SPAWN  = 150;
+// Difficulty ramps every FRAMES_PER_LEVEL frames (~10 s at 60 fps).
+// Fall speed goes 1 → 2 → 3 … capped at 14.
+// Spawn interval goes 240 → 210 → 180 … capped at 36 (one item ~every 0.6 s).
+const FRAMES_PER_LEVEL = 600;
+const BASE_SPEED  = 1;
+const BASE_SPAWN  = 240;
 
 function getLevel(frame)      { return Math.floor(frame / FRAMES_PER_LEVEL); }
 function getFallSpeed(frame)  { return Math.min(BASE_SPEED + getLevel(frame),       14); }

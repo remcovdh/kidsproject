@@ -24,11 +24,11 @@ export function renderWelcome(
       <div class="welcome-steps">
         ${STEPS.map((s, i) => `
           <div class="welcome-step">
+            <span class="welcome-step__num">${i + 1}</span>
             <div class="welcome-step__emoji">${s.emoji}</div>
             <p class="welcome-step__label">${s.label}</p>
             <p class="welcome-step__desc">${s.desc}</p>
           </div>
-          ${i < STEPS.length - 1 ? `<div class="welcome-step__arrow">→</div>` : ""}
         `).join("")}
       </div>
 

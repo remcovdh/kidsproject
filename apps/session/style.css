@@ -90,6 +90,48 @@ kbd {
 }
 
 /* ── Welcome ──────────────────────────────────────────────────────────────── */
+.step--welcome { gap: 1.5rem; }
+
+.welcome-session {
+  font-size: .95rem; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .08em;
+}
+.welcome-title {
+  font-size: clamp(2.4rem, 10vw, 4rem); font-weight: 900;
+  background: linear-gradient(135deg, var(--orange), var(--purple));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text; line-height: 1;
+}
+.welcome-tagline {
+  font-size: clamp(1rem, 3vw, 1.25rem); color: var(--muted); font-weight: 600;
+}
+
+.welcome-steps {
+  display: flex; align-items: flex-start; gap: .25rem;
+  overflow-x: auto; padding: .5rem .25rem 1rem;
+  width: 100%; justify-content: center; flex-wrap: wrap;
+}
+.welcome-step {
+  display: flex; flex-direction: column; align-items: center; gap: .3rem;
+  background: #fff; border-radius: var(--radius); padding: .75rem .6rem;
+  box-shadow: var(--shadow); min-width: 80px; flex: 1; max-width: 110px;
+}
+.welcome-step__emoji { font-size: 2.2rem; line-height: 1; }
+.welcome-step__label { font-size: .9rem; font-weight: 900; }
+.welcome-step__desc  { font-size: .72rem; color: var(--muted); line-height: 1.3; text-align: center; }
+.welcome-step__arrow {
+  font-size: 1.4rem; color: var(--orange); align-self: center;
+  flex-shrink: 0; padding: 0 .1rem;
+}
+
+.welcome-name-block {
+  display: flex; flex-direction: column; align-items: center; gap: .75rem;
+  background: #fff; border-radius: var(--radius); padding: 1.5rem 1.25rem;
+  box-shadow: var(--shadow); width: 100%; max-width: 440px;
+}
+.welcome-name-title { font-size: 1.4rem; font-weight: 900; }
+.welcome-name-hint  { font-size: .9rem; color: var(--muted); font-weight: 600; }
+
 .name-input {
   width: 100%; max-width: 360px;
   font-size: 1.75rem; font-weight: 700; text-align: center;

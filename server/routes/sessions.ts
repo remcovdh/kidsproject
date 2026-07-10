@@ -4,12 +4,29 @@ import db from "../db.js";
 
 export const sessionRouter = Router();
 
-// POST /api/sessions — create a new session (facilitator)
+const ALLOWED_PROVIDERS   = ["openai", "gemini", "local"] as const;
+const ALLOWED_GAME_TYPES  = ["catcher"] as const;
+const VALID_SOUND_IDS     = new Set(["boing", "splat", "whoosh", "pop", "squeak", "roar", "giggle", "crash", ""]);
+
+// POST /api/sessions — create a new session (facilitator only)
 sessionRouter.post("/", (req, res) => {
+  // If FACILITATOR_TOKEN is set in env, require it in the Authorization header.
+  const token = process.env.FACILITATOR_TOKEN;
+  if (token) {
+    const auth = req.headers.authorization;
+    if (auth !== `Bearer ${token}`) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+  }
+
   const { name, showPrompt = true, aiProvider = "openai" } = req.body as {
     name?: string; showPrompt?: boolean; aiProvider?: string;
   };
   if (!name) return res.status(400).json({ error: "name is required" });
+  if (name.length > 80) return res.status(400).json({ error: "Session name is too long (max 80 characters)" });
+  if (!ALLOWED_PROVIDERS.includes(aiProvider as typeof ALLOWED_PROVIDERS[number])) {
+    return res.status(400).json({ error: "Invalid AI provider" });
+  }
 
   const id = uuid();
   db.prepare(
@@ -26,6 +43,18 @@ sessionRouter.post("/publish", (req, res) => {
   };
   if (!childId || !spriteVersionId) {
     return res.status(400).json({ error: "childId and spriteVersionId are required" });
+  }
+
+  if (sounds) {
+    for (const v of Object.values(sounds)) {
+      if (!VALID_SOUND_IDS.has(String(v))) {
+        return res.status(400).json({ error: "Invalid sound ID" });
+      }
+    }
+  }
+
+  if (backgroundUrl && !/^\/uploads\//.test(backgroundUrl)) {
+    return res.status(400).json({ error: "Invalid background URL" });
   }
 
   const child = db.prepare("SELECT session_id FROM children WHERE id = ?").get(childId) as
@@ -60,6 +89,10 @@ sessionRouter.get("/:id", (req, res) => {
 sessionRouter.post("/:id/children", (req, res) => {
   const { name, gameType = "catcher" } = req.body as { name?: string; gameType?: string };
   if (!name) return res.status(400).json({ error: "name is required" });
+  if (name.length > 60) return res.status(400).json({ error: "Name is too long (max 60 characters)" });
+  if (!ALLOWED_GAME_TYPES.includes(gameType as typeof ALLOWED_GAME_TYPES[number])) {
+    return res.status(400).json({ error: "Invalid game type" });
+  }
 
   const session = db.prepare("SELECT id FROM sessions WHERE id = ?").get(req.params.id);
   if (!session) return res.status(404).json({ error: "Session not found" });

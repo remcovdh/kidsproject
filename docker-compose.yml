@@ -50,8 +50,8 @@ services:
   ollama:
     image: ollama/ollama
     profiles: ["local-ai"]
-    ports:
-      - "11434:11434"       # also reachable from the host at localhost:11434
+    # No host port binding — server container reaches Ollama at http://ollama:11434 internally.
+    # To run ollama pull manually: docker compose exec ollama ollama pull gemma4:12b
     volumes:
       - ollama_data:/root/.ollama
     deploy:

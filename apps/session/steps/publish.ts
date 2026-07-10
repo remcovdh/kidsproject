@@ -11,14 +11,25 @@ export function renderPublish(
   container.innerHTML = `
     <div class="step step--publish">
       <h1 class="step__title">Ready to show everyone? 🚀</h1>
-      ${version ? `<img class="publish-hero" src="${version.sprites.celebrate}" alt="Your character celebrating" />` : ""}
-      <p class="step__subtitle">${state.childName}'s game will appear in the gallery so everyone can play it!</p>
+      <div id="publish-hero-slot"></div>
+      <p class="step__subtitle" id="publish-subtitle"></p>
       <div class="step__actions">
         <button class="btn btn--ghost" id="back-btn">← Go back</button>
         <button class="btn btn--primary btn--big" id="publish-btn">Yes, put it on the wall! 🎉</button>
       </div>
     </div>
   `;
+
+  if (version) {
+    const img = document.createElement("img");
+    img.className = "publish-hero";
+    img.src = version.sprites.celebrate;
+    img.alt = "Your character celebrating";
+    container.querySelector("#publish-hero-slot")!.replaceWith(img);
+  }
+
+  container.querySelector<HTMLElement>("#publish-subtitle")!.textContent =
+    `${state.childName}'s game will appear in the gallery so everyone can play it!`;
 
   container.querySelector("#back-btn")?.addEventListener("click", () => goToStep("customize"));
 

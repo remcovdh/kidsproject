@@ -9,8 +9,8 @@ export function renderGallery(
   container.innerHTML = `
     <div class="step step--gallery">
       <h1 class="step__title">🎪 Game Gallery</h1>
-      <p class="step__subtitle">${state.sessionConfig?.name ?? "Session"} — everyone's games!</p>
-      ${state.published ? `<div class="success-banner">✅ Your game is on the wall, ${state.childName}!</div>` : ""}
+      <p class="step__subtitle" id="gallery-subtitle"></p>
+      <div id="gallery-banner"></div>
       <div class="gallery-grid" id="gallery-grid"><p class="gallery__loading">Loading...</p></div>
       <button class="btn btn--ghost btn--small" id="refresh-btn">Refresh 🔄</button>
     </div>
@@ -27,12 +27,25 @@ export function renderGallery(
     </div>
   `;
 
+  container.querySelector<HTMLElement>("#gallery-subtitle")!.textContent =
+    `${state.sessionConfig?.name ?? "Session"} — everyone's games!`;
+
+  if (state.published) {
+    const banner = document.createElement("div");
+    banner.className = "success-banner";
+    banner.textContent = `✅ Your game is on the wall, ${state.childName}!`;
+    container.querySelector("#gallery-banner")!.replaceWith(banner);
+  }
+
   const grid       = container.querySelector<HTMLElement>("#gallery-grid")!;
   const modal      = container.querySelector<HTMLElement>("#game-modal")!;
   const modalTitle = container.querySelector<HTMLElement>("#modal-title")!;
   const modalFrame = container.querySelector<HTMLIFrameElement>("#modal-frame")!;
 
+  const ALLOWED_GAME_TYPES = ["catcher"];
+
   function openGame(item: GalleryItem) {
+    if (!ALLOWED_GAME_TYPES.includes(item.gameType)) return;
     localStorage.setItem("kidsproject_sprites", JSON.stringify({
       ...item.sprites,
       ...(item.backgroundUrl ? { background: item.backgroundUrl } : {}),
@@ -61,16 +74,30 @@ export function renderGallery(
         grid.innerHTML = `<p class="gallery__empty">No games yet — be the first!</p>`;
         return;
       }
-      grid.innerHTML = items.map((item, i) => `
-        <button class="gallery-card" data-idx="${i}">
-          <img class="gallery-card__img" src="${item.previewUrl}" alt="${item.childName}" />
-          <span class="gallery-card__name">${item.childName}</span>
-          <span class="gallery-card__play">▶ Play</span>
-        </button>`).join("");
+      const fragment = document.createDocumentFragment();
+      items.forEach((item) => {
+        const card = document.createElement("button");
+        card.className = "gallery-card";
 
-      grid.querySelectorAll<HTMLButtonElement>(".gallery-card").forEach((card) => {
-        card.addEventListener("click", () => openGame(items[Number(card.dataset.idx)]));
+        const img = document.createElement("img");
+        img.className = "gallery-card__img";
+        img.src = item.previewUrl;
+        img.alt = item.childName;
+
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "gallery-card__name";
+        nameSpan.textContent = item.childName;
+
+        const playSpan = document.createElement("span");
+        playSpan.className = "gallery-card__play";
+        playSpan.textContent = "▶ Play";
+
+        card.append(img, nameSpan, playSpan);
+        card.addEventListener("click", () => openGame(item));
+        fragment.appendChild(card);
       });
+      grid.innerHTML = "";
+      grid.appendChild(fragment);
     });
   }
 

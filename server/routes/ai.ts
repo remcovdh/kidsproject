@@ -1,13 +1,33 @@
-import { Router } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import { v4 as uuid } from "uuid";
 import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import db, { UPLOAD_DIR } from "../db.js";
 import { getServerProvider } from "../ai/index.js";
+import { isFlagged } from "./moderation.js";
 
 const VERSION_LABELS = ["First try", "Second try", "Third try", "Fourth try"];
 
 export const aiRouter = Router();
+
+// Simple in-memory rate limiter: max 10 AI calls per IP per minute.
+const _rateMap = new Map<string, { count: number; resetAt: number }>();
+function aiRateLimit(req: Request, res: Response, next: NextFunction) {
+  const ip  = req.ip ?? "unknown";
+  const now = Date.now();
+  const rec = _rateMap.get(ip);
+  if (!rec || rec.resetAt < now) {
+    _rateMap.set(ip, { count: 1, resetAt: now + 60_000 });
+    return next();
+  }
+  if (rec.count >= 10) {
+    return res.status(429).json({ error: "Too many requests — please wait a moment." });
+  }
+  rec.count++;
+  next();
+}
+
+aiRouter.use(aiRateLimit);
 
 // POST /api/ai/sprites — generate a sprite pack for a child's drawing
 // Body: { childId, description, drawingBase64 }
@@ -20,6 +40,15 @@ aiRouter.post("/sprites", async (req, res) => {
 
   if (!childId || !description) {
     return res.status(400).json({ error: "childId and description are required" });
+  }
+  if (description.length > 300) {
+    return res.status(400).json({ error: "Description is too long (max 300 characters)" });
+  }
+  if (artStyle && artStyle.length > 50) {
+    return res.status(400).json({ error: "Art style is too long (max 50 characters)" });
+  }
+  if (isFlagged(description)) {
+    return res.status(400).json({ error: "Description contains inappropriate content" });
   }
 
   const row = db.prepare(`
@@ -66,22 +95,28 @@ aiRouter.post("/sprites", async (req, res) => {
     res.json({ id: versionId, label, prompt, sprites, createdAt: new Date().toISOString() });
   } catch (err) {
     console.error("Sprite generation error:", err);
-    res.status(500).json({ error: String(err instanceof Error ? err.message : err) });
+    res.status(500).json({ error: "Character generation failed — please try again." });
   }
 });
 
 // POST /api/ai/background — generate a background image from a text description
-// Body: { description, aiProvider? }
+// Body: { description, imageBase64?, styleDescription? }
 // Returns: { backgroundUrl }
 aiRouter.post("/background", async (req, res) => {
-  const { description, aiProvider, imageBase64, styleDescription } = req.body as {
-    description?: string; aiProvider?: string; imageBase64?: string; styleDescription?: string;
+  const { description, imageBase64, styleDescription } = req.body as {
+    description?: string; imageBase64?: string; styleDescription?: string;
   };
   if (!description?.trim() && !imageBase64) {
     return res.status(400).json({ error: "description or imageBase64 is required" });
   }
+  if (description && description.length > 300) {
+    return res.status(400).json({ error: "Description is too long (max 300 characters)" });
+  }
+  if (description && isFlagged(description)) {
+    return res.status(400).json({ error: "Description contains inappropriate content" });
+  }
 
-  const providerName = aiProvider ?? process.env.AI_PROVIDER ?? "openai";
+  const providerName = process.env.AI_PROVIDER ?? "openai";
   if (providerName === "openai" && !process.env.OPENAI_API_KEY) {
     return res.status(500).json({
       error: "OPENAI_API_KEY is not set on the server. Add it to your .env file and restart.",
@@ -99,6 +134,6 @@ aiRouter.post("/background", async (req, res) => {
     res.json({ backgroundUrl: `/uploads/${filename}` });
   } catch (err) {
     console.error("Background generation error:", err);
-    res.status(500).json({ error: String(err instanceof Error ? err.message : err) });
+    res.status(500).json({ error: "Background generation failed — please try again." });
   }
 });

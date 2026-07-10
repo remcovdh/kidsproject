@@ -11,6 +11,11 @@ const BLOCKED_WORDS: string[] = [
   "fuck", "shit", "bitch", "cunt", "asshole",
 ];
 
+export function isFlagged(text: string): boolean {
+  const lower = text.toLowerCase();
+  return BLOCKED_WORDS.some((w) => lower.includes(w));
+}
+
 // POST /api/moderation/check — check free-text input before sending to AI
 // Body: { text, childId, sessionId }
 // Returns: { allowed: boolean, flagged: boolean, reason?: string }
@@ -21,11 +26,7 @@ moderationRouter.post("/check", (req, res) => {
     return res.status(400).json({ error: "text is required" });
   }
 
-  const lower = text.toLowerCase();
-  const hit = BLOCKED_WORDS.find((w) => lower.includes(w));
-
-  if (hit) {
-    // Log for teacher dashboard — do not expose which word triggered
+  if (isFlagged(text)) {
     return res.json({ allowed: false, flagged: true, reason: "inappropriate content" });
   }
 

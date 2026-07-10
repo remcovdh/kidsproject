@@ -7,7 +7,7 @@ export function renderPickGame(
 ) {
   container.innerHTML = `
     <div class="step">
-      <h1 class="step__title">Hi ${state.childName}! 👋</h1>
+      <h1 class="step__title" id="pick-game-title"></h1>
       <p class="step__subtitle">Pick a game — we'll turn your drawing into it!</p>
 
       <div class="game-cards">
@@ -43,6 +43,9 @@ export function renderPickGame(
       </div>
     </div>
   `;
+
+  container.querySelector<HTMLElement>("#pick-game-title")!.textContent =
+    `Hi ${state.childName}! 👋`;
 
   const modal      = container.querySelector<HTMLElement>("#demo-modal")!;
   const demoFrame  = container.querySelector<HTMLIFrameElement>("#demo-frame")!;

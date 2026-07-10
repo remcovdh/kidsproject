@@ -1,19 +1,27 @@
 import { Router } from "express";
 import multer from "multer";
 import { v4 as uuid } from "uuid";
-import { extname } from "path";
 import { UPLOAD_DIR } from "../db.js";
 
-const storage = multer.diskStorage({
-  destination: UPLOAD_DIR,
-  filename:    (_req, file, cb) => cb(null, `${uuid()}${extname(file.originalname) || ".png"}`),
-});
+// Map allowed MIME types to safe extensions.
+// SVG is intentionally excluded — it can contain <script> tags.
+const MIME_TO_EXT: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png":  ".png",
+  "image/webp": ".webp",
+  "image/gif":  ".gif",
+  "image/heic": ".heic",
+  "image/heif": ".heif",
+};
 
 const upload = multer({
-  storage,
+  storage: multer.diskStorage({
+    destination: UPLOAD_DIR,
+    filename: (_req, file, cb) => cb(null, `${uuid()}${MIME_TO_EXT[file.mimetype] ?? ".jpg"}`),
+  }),
   limits: { fileSize: 15 * 1024 * 1024 },
   fileFilter(_req, file, cb) {
-    cb(null, file.mimetype.startsWith("image/"));
+    cb(null, file.mimetype in MIME_TO_EXT);
   },
 });
 

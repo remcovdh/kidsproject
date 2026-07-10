@@ -88,10 +88,10 @@ Starts:
 ## Environment variables
 
 ```
-AI_PROVIDER=openai          # openai | gemini
+AI_PROVIDER=openai          # openai | gemini | local
 OPENAI_API_KEY=...
 GEMINI_API_KEY=...
-SESSION_SECRET=...
+FACILITATOR_TOKEN=...       # optional; if set, POST /api/sessions and DELETE /api/sessions/:id require Bearer auth
 UPLOAD_DIR=./uploads
 ```
 

@@ -16,14 +16,16 @@ const app  = express();
 const PORT = process.env.PORT ?? 3002;
 
 app.use(cors());
-app.use(express.json({ limit: "15mb" }));
 
 // Serve uploaded images (drawings + generated sprites) at /uploads/**
 app.use("/uploads", express.static(UPLOAD_DIR));
 
+// AI routes carry drawingBase64 / imageBase64 — give them a large limit.
+// All other routes only need small JSON payloads.
+app.use("/api/ai",         express.json({ limit: "15mb" }), aiRouter);
+app.use(express.json({ limit: "50kb" }));
 app.use("/api/sessions",   sessionRouter);
 app.use("/api/uploads",    uploadRouter);
-app.use("/api/ai",         aiRouter);
 app.use("/api/moderation", moderationRouter);
 
 app.listen(PORT, () => {

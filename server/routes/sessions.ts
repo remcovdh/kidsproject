@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { v4 as uuid } from "uuid";
 import db from "../db.js";
 
@@ -8,16 +8,19 @@ const ALLOWED_PROVIDERS   = ["openai", "gemini", "local"] as const;
 const ALLOWED_GAME_TYPES  = ["catcher"] as const;
 const VALID_SOUND_IDS     = new Set(["boing", "splat", "whoosh", "pop", "squeak", "roar", "giggle", "crash", ""]);
 
+function checkFacilitatorAuth(req: Request, res: Response): boolean {
+  const token = process.env.FACILITATOR_TOKEN;
+  if (!token) return true;
+  if (req.headers.authorization !== `Bearer ${token}`) {
+    res.status(401).json({ error: "Unauthorized" });
+    return false;
+  }
+  return true;
+}
+
 // POST /api/sessions — create a new session (facilitator only)
 sessionRouter.post("/", (req, res) => {
-  // If FACILITATOR_TOKEN is set in env, require it in the Authorization header.
-  const token = process.env.FACILITATOR_TOKEN;
-  if (token) {
-    const auth = req.headers.authorization;
-    if (auth !== `Bearer ${token}`) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-  }
+  if (!checkFacilitatorAuth(req, res)) return;
 
   const { name, showPrompt = true, aiProvider = "openai" } = req.body as {
     name?: string; showPrompt?: boolean; aiProvider?: string;
@@ -132,4 +135,26 @@ sessionRouter.get("/:id/gallery", (req, res) => {
       sounds,
     };
   }));
+});
+
+// DELETE /api/sessions/:id — purge a completed session and all child data (facilitator only)
+// Deletes in foreign-key order: published_games → sprite_versions → children → sessions.
+// Note: uploaded files on disk are NOT removed here; run a periodic cleanup script if needed.
+sessionRouter.delete("/:id", (req, res) => {
+  if (!checkFacilitatorAuth(req, res)) return;
+
+  const session = db.prepare("SELECT id FROM sessions WHERE id = ?").get(req.params.id);
+  if (!session) return res.status(404).json({ error: "Session not found" });
+
+  db.transaction(() => {
+    db.prepare("DELETE FROM published_games WHERE session_id = ?").run(req.params.id);
+    db.prepare(`
+      DELETE FROM sprite_versions
+      WHERE child_id IN (SELECT id FROM children WHERE session_id = ?)
+    `).run(req.params.id);
+    db.prepare("DELETE FROM children WHERE session_id = ?").run(req.params.id);
+    db.prepare("DELETE FROM sessions WHERE id = ?").run(req.params.id);
+  })();
+
+  res.json({ ok: true });
 });

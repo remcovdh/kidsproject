@@ -5,7 +5,9 @@ export interface SpriteFile {
 
 export interface SpriteBuffers {
   idle:        SpriteFile;
-  move:        SpriteFile;
+  move:        SpriteFile;       // running pose, facing/moving right
+  moveLeft?:   SpriteFile;       // running pose, facing/moving left — optional; providers that
+                                  // don't generate it fall back to mirroring `move` client-side
   celebrate:   SpriteFile;
   collectible: SpriteFile; // the item that falls in the catcher game
 }

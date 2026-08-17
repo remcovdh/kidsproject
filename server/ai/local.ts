@@ -55,7 +55,7 @@ function pickColor(desc: string): [string, string] {
 
 // Per-pose geometry: body-center Y, head-center Y, arm endpoints, leg endpoints, smile path
 type Pose = { by: number; hy: number; al: number[]; ar: number[]; ll: number[]; lr: number[]; sm: string };
-const POSES: Record<Exclude<keyof SpriteBuffers, "collectible">, Pose> = {
+const POSES: Record<Exclude<keyof SpriteBuffers, "collectible" | "moveLeft">, Pose> = {
   idle: {
     by: 128, hy: 72,
     al: [62, 122, 36, 148],  ar: [138, 122, 164, 148],
@@ -114,7 +114,7 @@ function svgBackground(description: string): SpriteFile {
   return { data: Buffer.from(svg), ext: "svg" };
 }
 
-function svgSprite(description: string, pose: Exclude<keyof SpriteBuffers, "collectible">): SpriteFile {
+function svgSprite(description: string, pose: Exclude<keyof SpriteBuffers, "collectible" | "moveLeft">): SpriteFile {
   const [fill, dark] = pickColor(description);
   const p = POSES[pose];
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
@@ -137,13 +137,13 @@ function svgSprite(description: string, pose: Exclude<keyof SpriteBuffers, "coll
 
 // ── Stable Diffusion via Automatic1111 REST API ───────────────────────────────
 
-const SD_POSE_PROMPTS: Record<Exclude<keyof SpriteBuffers, "collectible">, string> = {
+const SD_POSE_PROMPTS: Record<Exclude<keyof SpriteBuffers, "collectible" | "moveLeft">, string> = {
   idle:      "standing still, relaxed, neutral pose, arms at sides",
   move:      "running, motion, dynamic, sideways",
   celebrate: "celebrating, arms raised in victory, happy",
 };
 
-async function generateViaSD(characterDesc: string, pose: Exclude<keyof SpriteBuffers, "collectible">): Promise<SpriteFile> {
+async function generateViaSD(characterDesc: string, pose: Exclude<keyof SpriteBuffers, "collectible" | "moveLeft">): Promise<SpriteFile> {
   const sdUrl = process.env.LOCAL_SD_URL!.replace(/\/$/, "");
   const body  = {
     prompt: `game character sprite, ${characterDesc}, ${SD_POSE_PROMPTS[pose]}, simple 2d cartoon, transparent background, centered, no text, no watermark`,
@@ -163,7 +163,7 @@ async function generateViaSD(characterDesc: string, pose: Exclude<keyof SpriteBu
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
-const VISION_POSE_PROMPTS: Record<Exclude<keyof SpriteBuffers, "collectible">, string> = {
+const VISION_POSE_PROMPTS: Record<Exclude<keyof SpriteBuffers, "collectible" | "moveLeft">, string> = {
   idle:      "standing still, relaxed, neutral upright pose",
   move:      "running or sliding sideways, dynamic movement",
   celebrate: "cheering with arms raised, joyful celebration",
@@ -207,7 +207,7 @@ const provider: ServerAiProvider = {
       console.log("[local] No image generation endpoint configured — using SVG sprites.");
     }
 
-    const poses = Object.keys(VISION_POSE_PROMPTS) as Exclude<keyof SpriteBuffers, "collectible">[];
+    const poses = Object.keys(VISION_POSE_PROMPTS) as Exclude<keyof SpriteBuffers, "collectible" | "moveLeft">[];
 
     const [poseEntries, collectibleSprite] = await Promise.all([
       Promise.all(poses.map(async (pose) => {

@@ -7,6 +7,9 @@ const params = new URLSearchParams(location.search);
 const ASSETS = {
   character_idle:      spriteConfig.idle        ?? params.get("idle")        ?? "assets/character_idle.png",
   character_move:      spriteConfig.move        ?? params.get("move")        ?? "assets/character_idle.png",
+  // No fallback default — an empty src fails to load, and drawCatcher() falls back to
+  // mirroring character_move when this pose isn't available (older/other AI providers).
+  character_move_left: spriteConfig.moveLeft    ?? params.get("moveLeft")    ?? "",
   character_celebrate: spriteConfig.celebrate   ?? params.get("celebrate")   ?? "assets/character_idle.png",
   falling:             spriteConfig.collectible ?? params.get("falling")     ?? "assets/collectible.png",
   background:          spriteConfig.background  ?? params.get("background")  ?? "assets/background.png",
@@ -192,25 +195,46 @@ function drawFallers() {
   }
 }
 
+// Draw `img` fitted (aspect-ratio preserved, letterboxed) inside the given box, instead
+// of stretching it to fill — sprite panels aren't guaranteed to be perfectly square.
+function drawSpriteFitted(img, boxX, boxY, boxW, boxH, mirror) {
+  const scale = Math.min(boxW / img.width, boxH / img.height);
+  const w = img.width * scale;
+  const h = img.height * scale;
+  const dx = boxX + (boxW - w) / 2;
+  const dy = boxY + (boxH - h) / 2;
+  if (mirror) {
+    ctx.save();
+    ctx.translate(dx + w, dy);
+    ctx.scale(-1, 1);
+    ctx.drawImage(img, 0, 0, w, h);
+    ctx.restore();
+  } else {
+    ctx.drawImage(img, dx, dy, w, h);
+  }
+}
+
 function drawCatcher() {
-  // Use the pose-specific sprite; fall back to idle if the image didn't load
-  const img = images[`character_${state.pose}`] ?? images.character_idle;
+  let img, mirror = false;
+  if (state.pose === "move" && state.facing === "left") {
+    if (images.character_move_left) {
+      // A real left-facing pose was generated — use it directly.
+      img = images.character_move_left;
+    } else {
+      // Provider didn't generate a left pose (e.g. local/SVG placeholder) — fall back
+      // to mirroring the right-facing move sprite, same as before.
+      img = images.character_move;
+      mirror = true;
+    }
+  } else {
+    img = images[`character_${state.pose}`] ?? images.character_idle;
+  }
   if (!img) {
     ctx.fillStyle = "#4ECDC4";
     ctx.fillRect(state.catcher.x, state.catcher.y, CATCHER_W, CATCHER_H);
     return;
   }
-  // The "move" sprite is generated facing right, so mirror it when moving left.
-  // Idle/celebrate poses are left as generated — no facing requirement for those.
-  if (state.pose === "move" && state.facing === "left") {
-    ctx.save();
-    ctx.translate(state.catcher.x + CATCHER_W, state.catcher.y);
-    ctx.scale(-1, 1);
-    ctx.drawImage(img, 0, 0, CATCHER_W, CATCHER_H);
-    ctx.restore();
-  } else {
-    ctx.drawImage(img, state.catcher.x, state.catcher.y, CATCHER_W, CATCHER_H);
-  }
+  drawSpriteFitted(img, state.catcher.x, state.catcher.y, CATCHER_W, CATCHER_H, mirror);
 }
 
 function drawHUD() {
@@ -295,10 +319,16 @@ stopBtn.addEventListener("click",   () => showGameOver());
 replayBtn.addEventListener("click", () => restartGame());
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-Promise.all([
+const assetLoads = [
   loadImage("character_idle",      ASSETS.character_idle),
   loadImage("character_move",      ASSETS.character_move),
   loadImage("character_celebrate", ASSETS.character_celebrate),
   loadImage("falling",             ASSETS.falling),
   loadImage("background",          ASSETS.background),
-]).then(loop);
+];
+// Only attempt to load if a URL was actually provided — an empty src's load/error
+// behavior is inconsistent across browsers, so skip it outright instead of relying on it.
+if (ASSETS.character_move_left) {
+  assetLoads.push(loadImage("character_move_left", ASSETS.character_move_left));
+}
+Promise.all(assetLoads).then(loop);

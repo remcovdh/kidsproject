@@ -44,8 +44,10 @@ export interface SessionConfig {
 export interface SpritePack {
   idle:        string;
   move:        string;
+  moveLeft?:   string; // optional — providers that don't generate it fall back to mirroring `move`
   celebrate:   string;
   collectible: string;
+  sheet?:      string; // optional raw sprite-sheet debug image (openai provider only)
 }
 
 export interface SpriteVersion {

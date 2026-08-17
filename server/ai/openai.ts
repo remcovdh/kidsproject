@@ -2,15 +2,25 @@ import OpenAI from "openai";
 import sharp from "sharp";
 import type { ServerAiProvider, SpriteBuffers, SpriteFile } from "./index.js";
 
-const POSE_PROMPTS: Record<Exclude<keyof SpriteBuffers, "collectible">, string> = {
+type SheetPose = "idle" | "move" | "moveLeft" | "celebrate";
+
+const POSE_PROMPTS: Record<SheetPose, string> = {
   idle:      "standing still, relaxed, neutral upright pose, arms at sides",
-  move:      "running or sliding sideways, dynamic movement, legs in mid-stride, facing and moving toward the RIGHT",
+  move:      "running, dynamic mid-stride running motion, clearly facing and moving toward the RIGHT side of the image",
+  moveLeft:  "running, dynamic mid-stride running motion, clearly facing and moving toward the LEFT side of the image — a mirror image of a rightward run, not the same pose reused",
   celebrate: "cheering with both arms raised in victory, mouth open in a big smile",
 };
 
-// Order the 3 poses appear left-to-right in the generated sprite sheet.
-const SHEET_POSE_ORDER: Array<Exclude<keyof SpriteBuffers, "collectible">> = ["idle", "move", "celebrate"];
-const PANEL_SIZE = 512;
+// 2x2 grid layout — quadrant (col, row) for each pose, using the FULL image height per
+// panel (not just a top strip) so there's enough vertical room for a full-body pose.
+const SHEET_LAYOUT: Array<{ pose: SheetPose; col: 0 | 1; row: 0 | 1 }> = [
+  { pose: "idle",      col: 0, row: 0 },
+  { pose: "move",      col: 1, row: 0 },
+  { pose: "moveLeft",  col: 0, row: 1 },
+  { pose: "celebrate", col: 1, row: 1 },
+];
+const PANEL_W = 512;
+const PANEL_H = 768;
 // Crop a few px inside each panel's nominal boundary — defensive against any stray
 // edge/border pixels landing right at the boundary line.
 const CROP_INSET = 6;
@@ -47,25 +57,29 @@ const provider: ServerAiProvider = {
       ? "Preserve the EXACT childlike art style, rough hand-drawn quality, and original colors from the drawing. Do not clean up or professionalize the look — keep it looking like the child's own style."
       : `Render as a clean ${artStyle ?? "cartoon"} game sprite. Use the character's SHAPE and distinctive features from the drawing, but apply a fresh ${artStyle ?? "cartoon"} art style with bold outlines and bright colors. Do NOT copy the drawing's coloring or rough style.`;
 
-    // Generate all 3 character poses as ONE sprite-sheet image (instead of 3 independent
-    // calls) so the poses stay visually consistent with each other — same colors, shape,
-    // and proportions — then crop the sheet into 3 separate sprite files. The collectible
+    // Generate all 4 character poses as ONE sprite-sheet image (instead of independent calls)
+    // so they stay visually consistent with each other — same colors, shape, proportions —
+    // then crop the sheet into separate sprite files. Both left- and right-running poses are
+    // generated explicitly (not mirrored client-side) since a text prompt asking for a single
+    // "facing right" running pose isn't a reliable enough constraint for gpt-image-1 to honor
+    // consistently, and a wrong-direction sprite is very noticeable in gameplay. The collectible
     // has no pose-consistency requirement, so it stays a separate call, run in parallel.
     const sheetPrompt =
-      `2D video game character sprite sheet. Split the TOP HALF of the image into exactly 3 ` +
-      `equal invisible square regions, side by side, each ${PANEL_SIZE}x${PANEL_SIZE}. The bottom ` +
-      `half of the image is blank/transparent. ` +
+      `2D video game character sprite sheet, a 2x2 grid of exactly 4 equal invisible regions, ` +
+      `each ${PANEL_W}x${PANEL_H}, filling the ENTIRE image (top-left, top-right, bottom-left, ` +
+      `bottom-right). ` +
       `IMPORTANT — do NOT draw any dividing lines, borders, frames, panel outlines, or gutters ` +
-      `anywhere in the image — the 3-region split is an invisible layout guide only, the final ` +
-      `image must look like plain artwork with nothing separating the regions. ` +
-      `In each of the 3 regions, draw the character FULL BODY from head to feet, entirely inside ` +
+      `anywhere in the image — the grid is an invisible layout guide only, the final image must ` +
+      `look like plain artwork with nothing separating the regions. ` +
+      `In each of the 4 regions, draw the character FULL BODY from head to feet, entirely inside ` +
       `that region with a clear margin of empty space on every side — the head, hands, and feet ` +
       `must NOT touch or cross the edge of the region. Nothing may be cropped or cut off. ` +
-      `CHARACTER (keep IDENTICAL across all 3 regions — same shape, colors, face, and design): ${characterSheet}. ` +
+      `CHARACTER (keep IDENTICAL across all 4 regions — same shape, colors, face, and design): ${characterSheet}. ` +
       `STYLE: ${styleInstruction} ` +
-      `LEFT region: ${POSE_PROMPTS.idle}. ` +
-      `MIDDLE region: ${POSE_PROMPTS.move}. ` +
-      `RIGHT region: ${POSE_PROMPTS.celebrate}. ` +
+      `TOP-LEFT region: ${POSE_PROMPTS.idle}. ` +
+      `TOP-RIGHT region: ${POSE_PROMPTS.move}. ` +
+      `BOTTOM-LEFT region: ${POSE_PROMPTS.moveLeft}. ` +
+      `BOTTOM-RIGHT region: ${POSE_PROMPTS.celebrate}. ` +
       `Transparent background, no text, no watermark, no numbers or labels, PNG.`;
 
     const [sheetResult, collectibleFile] = await Promise.all([
@@ -73,7 +87,7 @@ const provider: ServerAiProvider = {
         const response = await client.images.generate({
           model: "gpt-image-1",
           prompt: sheetPrompt,
-          size: "1536x1024",
+          size: "1024x1536",
           quality: "high",
           background: "transparent",
           n: 1,
@@ -82,13 +96,13 @@ const provider: ServerAiProvider = {
         if (!b64) throw new Error("No image data returned for sprite sheet");
         const sheetBuffer = Buffer.from(b64, "base64");
 
-        const poseEntries = await Promise.all(SHEET_POSE_ORDER.map(async (pose, i) => {
+        const poseEntries = await Promise.all(SHEET_LAYOUT.map(async ({ pose, col, row }) => {
           const cropped = await sharp(sheetBuffer)
             .extract({
-              left: i * PANEL_SIZE + CROP_INSET,
-              top: CROP_INSET,
-              width: PANEL_SIZE - CROP_INSET * 2,
-              height: PANEL_SIZE - CROP_INSET * 2,
+              left: col * PANEL_W + CROP_INSET,
+              top: row * PANEL_H + CROP_INSET,
+              width: PANEL_W - CROP_INSET * 2,
+              height: PANEL_H - CROP_INSET * 2,
             })
             .png()
             .toBuffer();

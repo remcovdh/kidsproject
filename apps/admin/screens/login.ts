@@ -27,7 +27,7 @@ export function renderLogin(
     try {
       const token = await login(input.value);
       localStorage.setItem("admin_token", token);
-      goToScreen("roster", { token });
+      goToScreen(state.sessionId ? "roster" : "sessions", { token });
     } catch (err) {
       fieldErr.textContent = err instanceof Error ? err.message : String(err);
       fieldErr.hidden = false;

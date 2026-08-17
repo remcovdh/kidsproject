@@ -1,5 +1,5 @@
 import type { AdminState, Screen } from "../main.js";
-import { fetchRoster, uploadPhoto, type RosterChild, type PhotoStatus } from "../api.js";
+import { fetchRoster, uploadPhoto, fetchSessionInfo, type RosterChild, type PhotoStatus } from "../api.js";
 import { logout } from "../main.js";
 
 const STATUS_LABEL: Record<PhotoStatus, string> = {
@@ -21,8 +21,12 @@ export function renderRoster(
 
   container.innerHTML = `
     <div class="panel">
+      <button class="link-btn" id="back-btn">← All sessions</button>
       <div class="panel__header">
-        <h1 class="panel__title">Session roster</h1>
+        <div>
+          <h1 class="panel__title">${state.sessionName ?? "Session roster"}</h1>
+          <p class="panel__subtitle" id="join-code-line">Join code: …</p>
+        </div>
         <div class="panel__header-actions">
           <button class="btn btn--small" id="refresh-btn">Refresh</button>
           <button class="btn btn--small btn--outline" id="logout-btn">Log out</button>
@@ -43,7 +47,16 @@ export function renderRoster(
     if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
     logout();
   });
+  container.querySelector("#back-btn")?.addEventListener("click", () => {
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    goToScreen("sessions", { sessionId: "", sessionName: null });
+  });
   container.querySelector("#refresh-btn")?.addEventListener("click", load);
+
+  fetchSessionInfo(state.sessionId).then((info) => {
+    const line = container.querySelector<HTMLElement>("#join-code-line");
+    if (line) line.innerHTML = `Join code: <span class="join-code-badge">${info.joinCode}</span> — share this with the kids`;
+  }).catch(() => { /* non-critical; roster still works without it */ });
 
   function statusCell(childId: string, kind: "drawing" | "world", status: PhotoStatus): string {
     return `

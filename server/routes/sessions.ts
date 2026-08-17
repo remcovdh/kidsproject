@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { v4 as uuid } from "uuid";
-import db from "../db.js";
+import db, { generateJoinCode } from "../db.js";
 import { checkFacilitatorAuth } from "../auth.js";
 import { upload } from "./uploads.js";
 
@@ -33,6 +33,14 @@ function generateDisplayCode(sessionId: string): string {
   return `${ANIMALS[0][0]} ${ANIMALS[0][1]} ${Date.now() % 1000}`; // fallback, effectively unique
 }
 
+function newUniqueJoinCode(): string {
+  for (let i = 0; i < 10; i++) {
+    const code = generateJoinCode();
+    if (!db.prepare("SELECT 1 FROM sessions WHERE join_code = ?").get(code)) return code;
+  }
+  return `${generateJoinCode()}${Date.now() % 10}`; // fallback, effectively unique
+}
+
 // POST /api/sessions — create a new session (facilitator only)
 sessionRouter.post("/", (req, res) => {
   if (!checkFacilitatorAuth(req, res)) return;
@@ -47,10 +55,47 @@ sessionRouter.post("/", (req, res) => {
   }
 
   const id = uuid();
+  const joinCode = newUniqueJoinCode();
   db.prepare(
-    "INSERT INTO sessions (id, name, show_prompt, ai_provider) VALUES (?, ?, ?, ?)"
-  ).run(id, name, showPrompt ? 1 : 0, aiProvider);
-  res.json({ id });
+    "INSERT INTO sessions (id, name, show_prompt, ai_provider, join_code) VALUES (?, ?, ?, ?, ?)"
+  ).run(id, name, showPrompt ? 1 : 0, aiProvider, joinCode);
+  res.json({ id, joinCode });
+});
+
+// GET /api/sessions — list all sessions (facilitator only) — used by the admin app to pick
+// or manage a session after login
+sessionRouter.get("/", (req, res) => {
+  if (!checkFacilitatorAuth(req, res)) return;
+
+  const rows = db.prepare(`
+    SELECT s.id, s.name, s.join_code, s.ai_provider, s.show_prompt, s.created_at,
+      (SELECT COUNT(*) FROM children c WHERE c.session_id = s.id) AS child_count
+    FROM sessions s
+    ORDER BY s.created_at DESC
+  `).all() as Array<{
+    id: string; name: string; join_code: string; ai_provider: string;
+    show_prompt: number; created_at: string; child_count: number;
+  }>;
+
+  res.json(rows.map((r) => ({
+    id:         r.id,
+    name:       r.name,
+    joinCode:   r.join_code,
+    aiProvider: r.ai_provider,
+    showPrompt: r.show_prompt === 1,
+    createdAt:  r.created_at,
+    childCount: r.child_count,
+  })));
+});
+
+// GET /api/sessions/by-code/:code — resolve a short join code to a session (public, no
+// auth — this is how a kid's device finds the session without typing/scanning a full URL)
+sessionRouter.get("/by-code/:code", (req, res) => {
+  const code = req.params.code.trim().toUpperCase();
+  const session = db.prepare("SELECT id, name FROM sessions WHERE join_code = ?").get(code) as
+    { id: string; name: string } | undefined;
+  if (!session) return res.status(404).json({ error: "No session found with that code" });
+  res.json({ id: session.id, name: session.name });
 });
 
 // POST /api/sessions/publish — publish a child's game to the gallery
@@ -92,7 +137,7 @@ sessionRouter.post("/publish", (req, res) => {
 // GET /api/sessions/:id — load session config for child-facing app
 sessionRouter.get("/:id", (req, res) => {
   const session = db.prepare("SELECT * FROM sessions WHERE id = ?").get(req.params.id) as
-    { id: string; name: string; show_prompt: number; ai_provider: string } | undefined;
+    { id: string; name: string; show_prompt: number; ai_provider: string; join_code: string } | undefined;
   if (!session) return res.status(404).json({ error: "Session not found" });
 
   res.json({
@@ -100,6 +145,7 @@ sessionRouter.get("/:id", (req, res) => {
     name:        session.name,
     showPrompt:  session.show_prompt === 1,
     aiProvider:  session.ai_provider,
+    joinCode:    session.join_code,
   });
 });
 

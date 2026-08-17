@@ -70,6 +70,13 @@ if (!childCols.some((c) => c.name === "display_code")) {
   db.exec("ALTER TABLE children ADD COLUMN display_code TEXT");
 }
 
+// Idempotent migration: add sessions.join_code if it doesn't exist yet — the short code a
+// facilitator shares so kids can join without typing/scanning a full session URL.
+const sessionCols = db.prepare("PRAGMA table_info(sessions)").all() as Array<{ name: string }>;
+if (!sessionCols.some((c) => c.name === "join_code")) {
+  db.exec("ALTER TABLE sessions ADD COLUMN join_code TEXT");
+}
+
 // Seed a demo session on first run.
 // AI_PROVIDER env var sets (and on every restart updates) the demo session's provider,
 // so switching from openai → local is just a matter of changing the env var.
@@ -82,6 +89,21 @@ if (n === 0) {
   console.log(`  → seeded demo session (id: demo, provider: ${aiProvider})`);
 } else if (process.env.AI_PROVIDER) {
   db.prepare("UPDATE sessions SET ai_provider = ? WHERE id = 'demo'").run(aiProvider);
+}
+
+// Backfill join codes for any session that doesn't have one yet (the demo session on first
+// run, or any session created before the join_code column existed).
+const JOIN_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O/1/I/L — easy to read aloud
+export function generateJoinCode(): string {
+  let code = "";
+  for (let i = 0; i < 4; i++) code += JOIN_CODE_ALPHABET[Math.floor(Math.random() * JOIN_CODE_ALPHABET.length)];
+  return code;
+}
+const needsCode = db.prepare("SELECT id FROM sessions WHERE join_code IS NULL").all() as Array<{ id: string }>;
+for (const { id } of needsCode) {
+  let code: string;
+  do { code = generateJoinCode(); } while (db.prepare("SELECT 1 FROM sessions WHERE join_code = ?").get(code));
+  db.prepare("UPDATE sessions SET join_code = ? WHERE id = ?").run(code, id);
 }
 
 export default db;

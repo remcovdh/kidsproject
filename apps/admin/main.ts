@@ -1,19 +1,24 @@
-import { renderLogin }  from "./screens/login.js";
-import { renderRoster } from "./screens/roster.js";
+import { renderLogin }    from "./screens/login.js";
+import { renderSessions } from "./screens/sessions.js";
+import { renderRoster }   from "./screens/roster.js";
 
-export type Screen = "login" | "roster";
+export type Screen = "login" | "sessions" | "roster";
 
 export interface AdminState {
   sessionId: string;
+  sessionName: string | null;
   token: string | null;
 }
 
 const state: AdminState = {
-  sessionId: new URLSearchParams(location.search).get("s") ?? "demo",
-  token: localStorage.getItem("admin_token"),
+  // Empty (not "demo") when no ?s= is given — that's the signal to land on the sessions
+  // list instead of a specific roster after login.
+  sessionId:   new URLSearchParams(location.search).get("s") ?? "",
+  sessionName: null,
+  token:       localStorage.getItem("admin_token"),
 };
 
-let screen: Screen = state.token ? "roster" : "login";
+let screen: Screen = !state.token ? "login" : (state.sessionId ? "roster" : "sessions");
 
 export function goToScreen(next: Screen, update: Partial<AdminState> = {}) {
   Object.assign(state, update);
@@ -35,6 +40,7 @@ function render() {
   app.appendChild(wrap);
 
   if (screen === "login") renderLogin(wrap, state, goToScreen);
+  else if (screen === "sessions") renderSessions(wrap, state, goToScreen);
   else renderRoster(wrap, state, goToScreen);
 }
 

@@ -1,4 +1,5 @@
 import { fetchSession, type SessionConfig, type SpriteVersion } from "./api.js";
+import { renderJoinSession }        from "./steps/join-session.js";
 import { renderWelcome }            from "./steps/welcome.js";
 import { renderPickGame }           from "./steps/pick-game.js";
 import { renderUploadDrawing }      from "./steps/upload-drawing.js";
@@ -11,7 +12,7 @@ import { renderPublish }            from "./steps/publish.js";
 import { renderGallery }            from "./steps/gallery.js";
 
 export type Step =
-  | "welcome" | "pick-game" | "upload-drawing" | "upload-background"
+  | "join" | "welcome" | "pick-game" | "upload-drawing" | "upload-background"
   | "describe-character" | "generate-sprites" | "preview-game"
   | "customize" | "publish" | "gallery";
 
@@ -59,8 +60,20 @@ function currentPhaseIndex(state: SessionState): number {
   return PHASES.findIndex((p) => p.steps.includes(state.currentStep));
 }
 
+const urlParams    = new URLSearchParams(location.search);
+const urlSessionId = urlParams.get("s") ?? "";
+
+// No ?s= in the URL — a kid opening the app cold needs a way in, so show the join-code
+// screen first instead of silently falling back to some default session.
+const initialStep: Step = !urlSessionId
+  ? "join"
+  // A shared "?view=gallery" link (see steps/gallery.ts's share button) lands directly on
+  // the gallery — no name/registration needed, since anyone with the link is just there to
+  // watch, not to make a game.
+  : urlParams.get("view") === "gallery" ? "gallery" : "welcome";
+
 const state: SessionState = {
-  sessionId:            new URLSearchParams(location.search).get("s") ?? "demo",
+  sessionId:            urlSessionId,
   sessionConfig:        null,
   childId:              null,
   childName:            null,
@@ -73,16 +86,22 @@ const state: SessionState = {
   activeSpriteVersionId: null,
   soundAssignments:     {},
   published:            false,
-  // A shared "?view=gallery" link (see steps/gallery.ts's share button) lands directly on the
-  // gallery — no name/registration needed, since anyone with the link is just there to watch,
-  // not to make a game.
-  currentStep:          new URLSearchParams(location.search).get("view") === "gallery" ? "gallery" : "welcome",
+  currentStep:          initialStep,
   previewContext:       "character",
 };
 
 export function goToStep(step: Step, update: Partial<SessionState> = {}) {
   Object.assign(state, update, { currentStep: step });
   render();
+}
+
+// Called by steps/join-session.ts once a join code resolves to a real session.
+export function joinSession(sessionId: string) {
+  state.sessionId = sessionId;
+  fetchSession(sessionId).then((config) => {
+    state.sessionConfig = config;
+    goToStep("welcome");
+  });
 }
 
 function render() {
@@ -127,6 +146,7 @@ function render() {
   app.appendChild(wrap);
 
   const handlers: Record<Step, (el: HTMLElement, s: SessionState, go: typeof goToStep) => void> = {
+    "join":                renderJoinSession,
     "welcome":             renderWelcome,
     "pick-game":           renderPickGame,
     "upload-drawing":      renderUploadDrawing,
@@ -142,7 +162,11 @@ function render() {
   handlers[state.currentStep](wrap, state, goToStep);
 }
 
-fetchSession(state.sessionId).then((config) => {
-  state.sessionConfig = config;
+if (state.sessionId) {
+  fetchSession(state.sessionId).then((config) => {
+    state.sessionConfig = config;
+    render();
+  });
+} else {
   render();
-});
+}

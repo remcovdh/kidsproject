@@ -90,6 +90,14 @@ export async function fetchSession(sessionId: string): Promise<SessionConfig> {
   return apiFetch<SessionConfig>(`${API}/api/sessions/${sessionId}`);
 }
 
+export async function resolveJoinCode(code: string): Promise<{ id: string; name: string }> {
+  if (MOCK_MODE) {
+    await sleep(200);
+    return { id: "demo", name: "Dragon Workshop 🐉" };
+  }
+  return apiFetch<{ id: string; name: string }>(`${API}/api/sessions/by-code/${encodeURIComponent(code)}`);
+}
+
 const MOCK_ANIMALS = ["🦊 Fox", "🦉 Owl", "🐻 Bear", "🐼 Panda", "🦁 Lion"];
 
 export async function registerChild(sessionId: string, name: string): Promise<{ childId: string; displayCode: string }> {

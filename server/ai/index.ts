@@ -12,11 +12,21 @@ export interface SpriteBuffers {
   collectible: SpriteFile; // the item that falls in the catcher game
 }
 
+export interface SpriteGenerationResult {
+  sprites: SpriteBuffers;
+  prompt: string; // the real prompt sent for the character sheet — shown back to the child
+}
+
+export interface BackgroundGenerationResult {
+  file: SpriteFile;
+  prompt: string; // the real prompt sent for the background image — shown back to the child
+}
+
 export interface ServerAiProvider {
-  generateSprites(description: string, drawingBase64: string, styleMode?: "shape" | "copy", artStyle?: string): Promise<SpriteBuffers>;
+  generateSprites(description: string, drawingBase64: string, styleMode?: "shape" | "copy", artStyle?: string): Promise<SpriteGenerationResult>;
   // imageBase64 is required — the world/background flow always starts from a teacher-captured
   // photo now, with description+style refining it, mirroring generateSprites' shape/copy pattern.
-  generateBackground?(description: string, imageBase64: string, styleMode: "shape" | "copy", artStyle?: string): Promise<SpriteFile>;
+  generateBackground?(description: string, imageBase64: string, styleMode: "shape" | "copy", artStyle?: string): Promise<BackgroundGenerationResult>;
 }
 
 export async function getServerProvider(providerName: string): Promise<ServerAiProvider> {

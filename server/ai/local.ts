@@ -20,7 +20,7 @@
  */
 
 import OpenAI from "openai";
-import type { ServerAiProvider, SpriteBuffers, SpriteFile } from "./index.js";
+import type { ServerAiProvider, SpriteBuffers, SpriteFile, SpriteGenerationResult, BackgroundGenerationResult } from "./index.js";
 
 // ── SVG sprite generator ──────────────────────────────────────────────────────
 // Produces a simple but distinct cartoon character for each pose.
@@ -170,7 +170,7 @@ const VISION_POSE_PROMPTS: Record<Exclude<keyof SpriteBuffers, "collectible" | "
 };
 
 const provider: ServerAiProvider = {
-  async generateSprites(description: string, drawingBase64: string, styleMode?: "shape" | "copy", artStyle?: string): Promise<SpriteBuffers> {
+  async generateSprites(description: string, drawingBase64: string, styleMode?: "shape" | "copy", artStyle?: string): Promise<SpriteGenerationResult> {
     const baseURL    = process.env.LOCAL_BASE_URL   ?? "http://localhost:11434/v1";
     const apiKey     = process.env.LOCAL_API_KEY    ?? "ollama";
     const chatModel  = process.env.LOCAL_CHAT_MODEL ?? "gemma4:12b";
@@ -262,10 +262,19 @@ const provider: ServerAiProvider = {
       })(),
     ]);
 
-    return { ...Object.fromEntries(poseEntries), collectible: collectibleSprite } as unknown as SpriteBuffers;
+    const backend = useSD ? "local Stable Diffusion" : useImgApi ? "local image API" : "colored placeholder (no image model configured)";
+    const styleSummary = styleMode === "copy"
+      ? "preserve the exact childlike art style and colors from the drawing"
+      : `apply ${artStyle ?? "cartoon"} art style`;
+    const prompt = `Character: ${characterDesc}. Style: ${styleSummary}. Poses: idle, move, celebrate. (via ${backend})`;
+
+    return {
+      sprites: { ...Object.fromEntries(poseEntries), collectible: collectibleSprite } as unknown as SpriteBuffers,
+      prompt,
+    };
   },
 
-  async generateBackground(description: string, imageBase64: string, styleMode: "shape" | "copy", artStyle?: string): Promise<SpriteFile> {
+  async generateBackground(description: string, imageBase64: string, styleMode: "shape" | "copy", artStyle?: string): Promise<BackgroundGenerationResult> {
     const baseURL    = process.env.LOCAL_BASE_URL   ?? "http://localhost:11434/v1";
     const apiKey     = process.env.LOCAL_API_KEY    ?? "ollama";
     const chatModel  = process.env.LOCAL_CHAT_MODEL ?? "gemma4:12b";
@@ -298,32 +307,38 @@ const provider: ServerAiProvider = {
     const styleClause = styleMode === "copy"
       ? ", preserve the exact childlike art style and original colors from the drawing"
       : `, art style: ${artStyle ?? "cartoon"}`;
+    // Same fix as openai.ts: state the child's chosen theme directly, don't rely on the vision
+    // description alone to carry it through (it may not, if the photo doesn't obviously show it).
+    const themeClause = description ? `, world theme: ${description}` : "";
 
     if (useSD) {
       const sdUrl = process.env.LOCAL_SD_URL!.replace(/\/$/, "");
+      const prompt = `portrait background for a children's video game, tall format, ${sceneDescription}${themeClause}${styleClause}, simple 2d cartoon, colorful, no characters, no text`;
       const res = await fetch(`${sdUrl}/sdapi/v1/txt2img`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: `portrait background for a children's video game, tall format, ${sceneDescription}${styleClause}, simple 2d cartoon, colorful, no characters, no text`,
+          prompt,
           negative_prompt: "text, watermark, characters, people",
           width: 512, height: 768, steps: 20, cfg_scale: 7,
         }),
       });
       const json = await res.json() as { images?: string[] };
-      if (json.images?.[0]) return { data: Buffer.from(json.images[0], "base64"), ext: "png" };
+      if (json.images?.[0]) return { file: { data: Buffer.from(json.images[0], "base64"), ext: "png" }, prompt };
     } else if (imageModel) {
       const client = new OpenAI({ baseURL, apiKey });
-      const resp = await client.images.generate({
-        model: imageModel,
-        prompt: `Tall portrait-orientation background for a children's video game (taller than wide). Scene: ${sceneDescription}${styleClause}. Sky at top, scenery at bottom. Colorful, childlike art, no characters, no text.`,
-        size: "1024x1024", n: 1,
-      });
+      const prompt = `Tall portrait-orientation background for a children's video game (taller than wide). Scene: ${sceneDescription}${themeClause}${styleClause}. Sky at top, scenery at bottom. Colorful, childlike art, no characters, no text.`;
+      const resp = await client.images.generate({ model: imageModel, prompt, size: "1024x1024", n: 1 });
       const url = resp.data?.[0]?.url;
-      if (url) return { data: Buffer.from(await fetch(url).then(async r => new Uint8Array(await r.arrayBuffer()))), ext: "png" };
+      if (url) {
+        return { file: { data: Buffer.from(await fetch(url).then(async r => new Uint8Array(await r.arrayBuffer()))), ext: "png" }, prompt };
+      }
     }
 
-    return svgBackground(sceneDescription);
+    return {
+      file: svgBackground(sceneDescription),
+      prompt: `Scene: ${sceneDescription}${themeClause}${styleClause} (no image model configured — used a colored placeholder background)`,
+    };
   },
 };
 

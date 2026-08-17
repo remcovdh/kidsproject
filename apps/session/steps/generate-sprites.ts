@@ -76,16 +76,18 @@ export function renderGenerateSprites(
   }
 
   function renderLoading() {
-    const styleLabel = styleMode === "copy"
-      ? "Copy the exact childlike style and colors from the drawing."
-      : `Use the character's shape from the drawing and apply ${artStyle} art style.`;
-    const prompt = `Turn this child's drawing into a game character sprite pack. The character is: ${desc}. ${styleLabel} Create 3 poses: idle, move, celebrate.`;
+    // This is a plain-language summary of what's about to happen, not the literal text sent to
+    // the AI — the real prompt also includes what the AI sees when it looks at the drawing,
+    // which we don't know yet at this point. The exact prompt actually used is shown on the
+    // result screen once generation finishes.
+    const styleLabel = styleMode === "copy" ? "in your own drawing style" : `in a ${artStyle} style`;
 
     container.innerHTML = `
       <div class="step step--generate">
         <h1 class="step__title">Asking the AI... ✨</h1>
         ${show
-          ? `<div class="prompt-box"><p class="prompt-box__label">We're sending this to the AI:</p><p class="prompt-box__text">${prompt}</p></div>`
+          ? `<div class="prompt-box"><p class="prompt-box__label">Here's what we're asking for:</p>
+               <p class="prompt-box__text">A ${desc}, drawn ${styleLabel}, in 4 poses: standing still, running right, running left, and celebrating — all drawn together so they match.</p></div>`
           : `<p class="step__subtitle">The AI is drawing your character right now!</p>`}
         <div class="loading-dots"><span></span><span></span><span></span></div>
         <p class="loading-hint">This takes about 10 seconds...</p>
@@ -126,6 +128,9 @@ export function renderGenerateSprites(
       <div class="step step--generate">
         <h1 class="step__title">Here's your character! 🎉</h1>
         ${spritePoses(version)}
+        ${show
+          ? `<div class="prompt-box"><p class="prompt-box__label">What we actually asked the AI:</p><p class="prompt-box__text">${version.prompt}</p></div>`
+          : ""}
         <div class="step__actions">
           <button class="btn btn--ghost" id="retry-btn">Try again 🔄</button>
           <button class="btn btn--primary" id="play-btn">Let's play! ▶</button>

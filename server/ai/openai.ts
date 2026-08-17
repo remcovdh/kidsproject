@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import sharp from "sharp";
-import type { ServerAiProvider, SpriteBuffers, SpriteFile } from "./index.js";
+import type { ServerAiProvider, SpriteBuffers, SpriteFile, SpriteGenerationResult, BackgroundGenerationResult } from "./index.js";
 
 type SheetPose = "idle" | "move" | "moveLeft" | "celebrate";
 
@@ -26,7 +26,7 @@ const PANEL_H = 768;
 const CROP_INSET = 6;
 
 const provider: ServerAiProvider = {
-  async generateSprites(description: string, drawingBase64: string, styleMode?: "shape" | "copy", artStyle?: string): Promise<SpriteBuffers> {
+  async generateSprites(description: string, drawingBase64: string, styleMode?: "shape" | "copy", artStyle?: string): Promise<SpriteGenerationResult> {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     // Analyze the drawing — focus varies by mode
@@ -135,13 +135,16 @@ const provider: ServerAiProvider = {
     ]);
 
     return {
-      ...Object.fromEntries(sheetResult.poseEntries),
-      collectible: collectibleFile,
-      sheet: sheetResult.sheet,
-    } as unknown as SpriteBuffers;
+      sprites: {
+        ...Object.fromEntries(sheetResult.poseEntries),
+        collectible: collectibleFile,
+        sheet: sheetResult.sheet,
+      } as unknown as SpriteBuffers,
+      prompt: sheetPrompt,
+    };
   },
 
-  async generateBackground(description: string, imageBase64: string, styleMode: "shape" | "copy", artStyle?: string): Promise<SpriteFile> {
+  async generateBackground(description: string, imageBase64: string, styleMode: "shape" | "copy", artStyle?: string): Promise<BackgroundGenerationResult> {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     // Vision analysis of the teacher-captured world photo — focus varies by mode, mirroring
@@ -172,20 +175,31 @@ const provider: ServerAiProvider = {
       ? "Preserve the EXACT childlike art style, rough hand-drawn quality, and original colors from the drawing. Do not clean up or professionalize the look — keep it looking like the child's own style."
       : `Render as a clean ${artStyle ?? "cartoon"} game background. Use the scene's layout and distinctive features from the drawing, but apply a fresh ${artStyle ?? "cartoon"} art style with bold outlines and bright colors. Do NOT copy the drawing's coloring or rough style.`;
 
+    // The child's chosen theme (e.g. "Ocean") must be stated directly here, not just handed to
+    // the vision-analysis step as a hint — if the photo itself doesn't read as that theme, the
+    // vision description can end up not mentioning it at all, silently dropping the child's
+    // actual choice from the final image prompt.
+    const themeClause = description
+      ? `WORLD THEME (this must clearly come through in the final image, even if the photo below doesn't obviously show it): ${description}. `
+      : "";
+
+    const backgroundPrompt =
+      `A tall portrait-orientation background for a children's video game (taller than wide, like a phone screen). ` +
+      themeClause +
+      `SCENE DETAILS from the child's own drawing/photo: ${sceneDescription}. ` +
+      `STYLE: ${styleInstruction} ` +
+      `Sky fills the top, ground or scenery at the bottom. No characters, no text, just the scenery.`;
+
     const response = await client.images.generate({
       model: "gpt-image-1",
-      prompt:
-        `A tall portrait-orientation background for a children's video game (taller than wide, like a phone screen). ` +
-        `SCENE (based on a child's own drawing/photo): ${sceneDescription}. ` +
-        `STYLE: ${styleInstruction} ` +
-        `Sky fills the top, ground or scenery at the bottom. No characters, no text, just the scenery.`,
+      prompt: backgroundPrompt,
       size: "1024x1536",
       quality: "medium",
       n: 1,
     });
     const b64 = response.data?.[0]?.b64_json;
     if (!b64) throw new Error("No image data returned for background");
-    return { data: Buffer.from(b64, "base64"), ext: "png" };
+    return { file: { data: Buffer.from(b64, "base64"), ext: "png" }, prompt: backgroundPrompt };
   },
 };
 

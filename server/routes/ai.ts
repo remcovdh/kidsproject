@@ -94,8 +94,8 @@ aiRouter.post("/sprites", async (req, res) => {
   }
 
   try {
-    const provider  = await getServerProvider(row.ai_provider);
-    const buffers   = await provider.generateSprites(description, drawingBase64, styleMode, artStyle);
+    const provider = await getServerProvider(row.ai_provider);
+    const { sprites: buffers, prompt } = await provider.generateSprites(description, drawingBase64, styleMode, artStyle);
 
     const versionId = uuid();
     const spriteDir = join(UPLOAD_DIR, "sprites", versionId);
@@ -111,9 +111,7 @@ aiRouter.post("/sprites", async (req, res) => {
     const { n } = db.prepare(
       "SELECT COUNT(*) as n FROM sprite_versions WHERE child_id = ?"
     ).get(childId) as { n: number };
-    const label  = VERSION_LABELS[n] ?? `Try ${n + 1}`;
-    const styleDesc = styleMode === "copy" ? "copy drawing style" : `${artStyle ?? "cartoon"} (shape only)`;
-    const prompt = `Character: ${description}. Style: ${styleDesc}. Poses: idle, move, celebrate.`;
+    const label = VERSION_LABELS[n] ?? `Try ${n + 1}`;
 
     db.prepare(
       "INSERT INTO sprite_versions (id, child_id, label, prompt, sprites) VALUES (?, ?, ?, ?, ?)"
@@ -174,10 +172,10 @@ aiRouter.post("/background", async (req, res) => {
     if (!provider.generateBackground) {
       return res.status(501).json({ error: `Provider "${row.ai_provider}" does not support background generation.` });
     }
-    const { data, ext } = await provider.generateBackground(description ?? "", imageBase64, styleMode ?? "shape", artStyle);
-    const filename = `bg_${uuid()}.${ext}`;
-    writeFileSync(join(UPLOAD_DIR, filename), data);
-    res.json({ backgroundUrl: `/uploads/${filename}` });
+    const { file, prompt } = await provider.generateBackground(description ?? "", imageBase64, styleMode ?? "shape", artStyle);
+    const filename = `bg_${uuid()}.${file.ext}`;
+    writeFileSync(join(UPLOAD_DIR, filename), file.data);
+    res.json({ backgroundUrl: `/uploads/${filename}`, prompt });
   } catch (err) {
     console.error("Background generation error:", err);
     res.status(500).json({ error: "Background generation failed — please try again." });

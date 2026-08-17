@@ -33,12 +33,15 @@ export function renderUploadBackground(
 ) {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 
+  const show = state.sessionConfig?.showPrompt ?? false;
+
   type Phase = "waiting" | "confirm" | "describe" | "loading" | "result";
   let phase: Phase = "waiting";
   let photoUrl = "";
   let selectedBgDesc = "";
   let selectedStyle = "";
   let generatedUrl = "";
+  let generatedPrompt = "";
 
   function draw() {
     if (phase === "waiting") renderWaiting();
@@ -193,20 +196,30 @@ export function renderUploadBackground(
   }
 
   function renderLoading() {
+    const styleMode: "shape" | "copy" = selectedStyle === "as-drawn" ? "copy" : "shape";
+    const artStyle = selectedStyle === "as-drawn" ? "" : selectedStyle;
+    // Plain-language summary — the real prompt also depends on what the AI sees when it looks
+    // at the photo, which we don't know yet here. The exact prompt actually used is shown on
+    // the result screen once generation finishes.
+    const styleLabel = styleMode === "copy" ? "in the same style as your photo" : `in a ${artStyle} style`;
+    const themeLabel = selectedBgDesc ? selectedBgDesc : "your photo";
+
     container.innerHTML = `
       <div class="step">
         <h1 class="step__title">Painting your World... ✨</h1>
-        <p class="step__subtitle">This takes about 15 seconds...</p>
+        ${show
+          ? `<div class="prompt-box"><p class="prompt-box__label">Here's what we're asking for:</p>
+               <p class="prompt-box__text">A World based on your photo, showing ${themeLabel}, drawn ${styleLabel}.</p></div>`
+          : `<p class="step__subtitle">This takes about 15 seconds...</p>`}
         <div class="loading-dots"><span></span><span></span><span></span></div>
       </div>
     `;
 
     (async () => {
       try {
-        const styleMode: "shape" | "copy" = selectedStyle === "as-drawn" ? "copy" : "shape";
-        const artStyle = selectedStyle === "as-drawn" ? "" : selectedStyle;
-        const { backgroundUrl } = await generateBackground(state.childId ?? "", selectedBgDesc, styleMode, artStyle);
+        const { backgroundUrl, prompt } = await generateBackground(state.childId ?? "", selectedBgDesc, styleMode, artStyle);
         generatedUrl = backgroundUrl;
+        generatedPrompt = prompt;
         phase = "result";
         draw();
       } catch (err) {
@@ -237,6 +250,9 @@ export function renderUploadBackground(
         <div class="drawing-preview">
           <img src="${generatedUrl}" alt="Your World" />
         </div>
+        ${show
+          ? `<div class="prompt-box"><p class="prompt-box__label">What we actually asked the AI:</p><p class="prompt-box__text">${generatedPrompt}</p></div>`
+          : ""}
         <div class="step__actions">
           <button class="btn btn--ghost" id="retry-btn">Try again 🔄</button>
           <button class="btn btn--primary btn--big" id="use-btn">Use this World! →</button>

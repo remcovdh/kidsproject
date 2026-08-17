@@ -225,12 +225,15 @@ export async function generateBackground(
   description: string,
   styleMode: "shape" | "copy",
   artStyle?: string,
-): Promise<{ backgroundUrl: string }> {
+): Promise<{ backgroundUrl: string; prompt: string }> {
   if (MOCK_MODE) {
     await sleep(1500);
-    return { backgroundUrl: svgUrl("your world", "#4ECDC4") };
+    return {
+      backgroundUrl: svgUrl("your world", "#4ECDC4"),
+      prompt: `(mock) World: ${description || "a colorful game world"}. Style: ${styleMode === "copy" ? "as drawn" : artStyle}.`,
+    };
   }
-  return apiFetch<{ backgroundUrl: string }>(`${API}/api/ai/background`, {
+  return apiFetch<{ backgroundUrl: string; prompt: string }>(`${API}/api/ai/background`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ childId, description, styleMode, artStyle }),

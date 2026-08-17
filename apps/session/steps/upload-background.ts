@@ -1,5 +1,5 @@
 import type { SessionState, Step } from "../main.js";
-import { fetchPhotoStatus, confirmPhoto, generateBackground, urlToBase64 } from "../api.js";
+import { fetchPhotoStatus, confirmPhoto, generateBackground } from "../api.js";
 
 const BG_CHIPS = [
   { v: "a sunny meadow with flowers and butterflies", l: "Meadow",     e: "🌸" },
@@ -203,11 +203,9 @@ export function renderUploadBackground(
 
     (async () => {
       try {
-        const aiProvider = state.sessionConfig?.aiProvider ?? "openai";
-        const photoBase64 = await urlToBase64(photoUrl);
         const styleMode: "shape" | "copy" = selectedStyle === "as-drawn" ? "copy" : "shape";
         const artStyle = selectedStyle === "as-drawn" ? "" : selectedStyle;
-        const { backgroundUrl } = await generateBackground(selectedBgDesc, aiProvider, photoBase64, styleMode, artStyle);
+        const { backgroundUrl } = await generateBackground(state.childId ?? "", selectedBgDesc, styleMode, artStyle);
         generatedUrl = backgroundUrl;
         phase = "result";
         draw();

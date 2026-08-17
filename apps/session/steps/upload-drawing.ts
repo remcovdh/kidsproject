@@ -1,5 +1,5 @@
 import type { SessionState, Step } from "../main.js";
-import { fetchPhotoStatus, confirmPhoto, urlToBase64 } from "../api.js";
+import { fetchPhotoStatus, confirmPhoto } from "../api.js";
 
 // Module scope so a stray poller from a previous mount of this screen never runs
 // alongside a fresh one — main.ts has no unmount hook, so this must be cleared
@@ -87,8 +87,7 @@ export function renderUploadDrawing(
       yesBtn.disabled = true;
       noBtn.disabled  = true;
       await confirmPhoto(state.sessionId, state.childId ?? "", "drawing", true);
-      const drawingBase64 = await urlToBase64(photoUrl);
-      goToStep("describe-character", { drawingUrl: photoUrl, drawingBase64 });
+      goToStep("describe-character", { drawingUrl: photoUrl });
     });
 
     noBtn.addEventListener("click", async () => {

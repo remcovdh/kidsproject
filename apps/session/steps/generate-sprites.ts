@@ -92,7 +92,7 @@ export function renderGenerateSprites(
       </div>
     `;
 
-    generateSprites(state.childId ?? "anon", desc, state.drawingBase64 ?? "", styleMode, artStyle)
+    generateSprites(state.childId ?? "anon", desc, styleMode, artStyle)
       .then((version) => {
         currentVersion = version;
         versions = [...versions, version];

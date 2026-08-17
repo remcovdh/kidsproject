@@ -31,7 +31,6 @@ export interface SessionState {
   childDisplayCode: string | null;
   gameType: "catcher" | "jumper" | null;
   drawingUrl: string | null;
-  drawingBase64: string | null;
   backgroundUrl: string | null;
   characterDescription: CharacterDescription | null;
   spriteVersions: SpriteVersion[];
@@ -68,14 +67,16 @@ const state: SessionState = {
   childDisplayCode:     null,
   gameType:             null,
   drawingUrl:           null,
-  drawingBase64:        null,
   backgroundUrl:        null,
   characterDescription: null,
   spriteVersions:       [],
   activeSpriteVersionId: null,
   soundAssignments:     {},
   published:            false,
-  currentStep:          "welcome",
+  // A shared "?view=gallery" link (see steps/gallery.ts's share button) lands directly on the
+  // gallery — no name/registration needed, since anyone with the link is just there to watch,
+  // not to make a game.
+  currentStep:          new URLSearchParams(location.search).get("view") === "gallery" ? "gallery" : "welcome",
   previewContext:       "character",
 };
 

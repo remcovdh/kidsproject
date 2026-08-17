@@ -1,6 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { v4 as uuid } from "uuid";
-import { mkdirSync, writeFileSync } from "fs";
+import { mkdirSync, writeFileSync, readFileSync } from "fs";
 import { join } from "path";
 import db, { UPLOAD_DIR } from "../db.js";
 import { getServerProvider } from "../ai/index.js";
@@ -9,6 +9,25 @@ import { isFlagged } from "./moderation.js";
 const VERSION_LABELS = ["First try", "Second try", "Third try", "Fourth try"];
 
 export const aiRouter = Router();
+
+// Look up the child's latest teacher-approved photo of the given kind and read it from
+// disk as base64 — the server verifies this itself rather than trusting whatever image
+// data a client submits, so generation can't be triggered with an unapproved (or entirely
+// client-supplied) photo by calling these endpoints directly, bypassing the capture UI.
+function getApprovedPhotoBase64(childId: string, kind: "drawing" | "world"): string | null {
+  const row = db.prepare(`
+    SELECT url FROM photo_captures
+    WHERE child_id = ? AND kind = ? AND status = 'approved'
+    ORDER BY created_at DESC LIMIT 1
+  `).get(childId, kind) as { url: string } | undefined;
+  if (!row) return null;
+  const filePath = join(UPLOAD_DIR, row.url.replace(/^\/uploads\//, ""));
+  try {
+    return readFileSync(filePath).toString("base64");
+  } catch {
+    return null;
+  }
+}
 
 // Simple in-memory rate limiter: max 10 AI calls per IP per minute.
 const _rateMap = new Map<string, { count: number; resetAt: number }>();
@@ -30,11 +49,14 @@ function aiRateLimit(req: Request, res: Response, next: NextFunction) {
 aiRouter.use(aiRateLimit);
 
 // POST /api/ai/sprites — generate a sprite pack for a child's drawing
-// Body: { childId, description, drawingBase64 }
+// Body: { childId, description }
+// The drawing photo itself is NOT taken from the request body — it's looked up server-side
+// from the child's latest teacher-approved photo_captures record, so this can't be triggered
+// with an arbitrary/unapproved photo by calling the endpoint directly.
 // Returns: { id, label, prompt, sprites, createdAt }
 aiRouter.post("/sprites", async (req, res) => {
-  const { childId, description, drawingBase64 = "", styleMode, artStyle } = req.body as {
-    childId?: string; description?: string; drawingBase64?: string;
+  const { childId, description, styleMode, artStyle } = req.body as {
+    childId?: string; description?: string;
     styleMode?: "shape" | "copy"; artStyle?: string;
   };
 
@@ -59,6 +81,11 @@ aiRouter.post("/sprites", async (req, res) => {
   `).get(childId) as { id: string; ai_provider: string } | undefined;
 
   if (!row) return res.status(404).json({ error: "Child not found" });
+
+  const drawingBase64 = getApprovedPhotoBase64(childId, "drawing");
+  if (!drawingBase64) {
+    return res.status(400).json({ error: "No approved drawing photo found for this child yet — ask a helper to take one first." });
+  }
 
   if (row.ai_provider === "openai" && !process.env.OPENAI_API_KEY) {
     return res.status(500).json({
@@ -100,15 +127,17 @@ aiRouter.post("/sprites", async (req, res) => {
 });
 
 // POST /api/ai/background — generate a background image from a teacher-captured world photo,
-// refined by an optional description and an art-style choice (mirrors /api/ai/sprites' shape/copy pattern)
-// Body: { description?, imageBase64, styleMode, artStyle? }
+// refined by an optional description and an art-style choice (mirrors /api/ai/sprites' shape/copy
+// pattern). The photo is looked up server-side from the child's latest approved photo_captures
+// record, same as /api/ai/sprites — never trusted from the request body.
+// Body: { childId, description?, styleMode, artStyle? }
 // Returns: { backgroundUrl }
 aiRouter.post("/background", async (req, res) => {
-  const { description, imageBase64, styleMode, artStyle } = req.body as {
-    description?: string; imageBase64?: string; styleMode?: "shape" | "copy"; artStyle?: string;
+  const { childId, description, styleMode, artStyle } = req.body as {
+    childId?: string; description?: string; styleMode?: "shape" | "copy"; artStyle?: string;
   };
-  if (!imageBase64) {
-    return res.status(400).json({ error: "imageBase64 is required" });
+  if (!childId) {
+    return res.status(400).json({ error: "childId is required" });
   }
   if (description && description.length > 300) {
     return res.status(400).json({ error: "Description is too long (max 300 characters)" });
@@ -120,17 +149,30 @@ aiRouter.post("/background", async (req, res) => {
     return res.status(400).json({ error: "Description contains inappropriate content" });
   }
 
-  const providerName = process.env.AI_PROVIDER ?? "openai";
-  if (providerName === "openai" && !process.env.OPENAI_API_KEY) {
+  const row = db.prepare(`
+    SELECT c.id, s.ai_provider
+    FROM   children c
+    JOIN   sessions s ON s.id = c.session_id
+    WHERE  c.id = ?
+  `).get(childId) as { id: string; ai_provider: string } | undefined;
+
+  if (!row) return res.status(404).json({ error: "Child not found" });
+
+  const imageBase64 = getApprovedPhotoBase64(childId, "world");
+  if (!imageBase64) {
+    return res.status(400).json({ error: "No approved World photo found for this child yet — ask a helper to take one first." });
+  }
+
+  if (row.ai_provider === "openai" && !process.env.OPENAI_API_KEY) {
     return res.status(500).json({
       error: "OPENAI_API_KEY is not set on the server. Add it to your .env file and restart.",
     });
   }
 
   try {
-    const provider = await getServerProvider(providerName);
+    const provider = await getServerProvider(row.ai_provider);
     if (!provider.generateBackground) {
-      return res.status(501).json({ error: `Provider "${providerName}" does not support background generation.` });
+      return res.status(501).json({ error: `Provider "${row.ai_provider}" does not support background generation.` });
     }
     const { data, ext } = await provider.generateBackground(description ?? "", imageBase64, styleMode ?? "shape", artStyle);
     const filename = `bg_${uuid()}.${ext}`;

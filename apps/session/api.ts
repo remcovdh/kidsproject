@@ -133,7 +133,6 @@ export async function checkModeration(text: string): Promise<{ allowed: boolean 
 export async function generateSprites(
   childId: string,
   description: string,
-  _drawingBase64: string,
   styleMode: "shape" | "copy" = "shape",
   artStyle = "cartoon",
 ): Promise<SpriteVersion> {
@@ -159,7 +158,7 @@ export async function generateSprites(
   return apiFetch<SpriteVersion>(`${API}/api/ai/sprites`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ childId, description, drawingBase64: _drawingBase64, styleMode, artStyle }),
+    body: JSON.stringify({ childId, description, styleMode, artStyle }),
   });
 }
 
@@ -214,9 +213,8 @@ export async function fetchGallery(sessionId: string): Promise<GalleryItem[]> {
 }
 
 export async function generateBackground(
+  childId: string,
   description: string,
-  aiProvider: string,
-  imageBase64: string,
   styleMode: "shape" | "copy",
   artStyle?: string,
 ): Promise<{ backgroundUrl: string }> {
@@ -227,7 +225,7 @@ export async function generateBackground(
   return apiFetch<{ backgroundUrl: string }>(`${API}/api/ai/background`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ description, aiProvider, imageBase64, styleMode, artStyle }),
+    body: JSON.stringify({ childId, description, styleMode, artStyle }),
   });
 }
 

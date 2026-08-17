@@ -7,6 +7,7 @@ import { sessionRouter }    from "./routes/sessions.js";
 import { uploadRouter }     from "./routes/uploads.js";
 import { aiRouter }         from "./routes/ai.js";
 import { moderationRouter } from "./routes/moderation.js";
+import { authRouter }       from "./routes/auth.js";
 
 if (!process.env.OPENAI_API_KEY) {
   console.warn("⚠️  OPENAI_API_KEY not set — sprite generation will fail in real mode.");
@@ -27,6 +28,7 @@ app.use(express.json({ limit: "50kb" }));
 app.use("/api/sessions",   sessionRouter);
 app.use("/api/uploads",    uploadRouter);
 app.use("/api/moderation", moderationRouter);
+app.use("/api/auth",       authRouter);
 
 app.listen(PORT, () => {
   console.log(`API server →  http://localhost:${PORT}`);

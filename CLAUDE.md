@@ -1,6 +1,6 @@
 # Kids AI Workshop
 
-A hosted, guided web app where children (ages 6–12) use AI to turn their drawings into simple browser games. Runs in supervised sessions of max 20 kids, ~90 minutes each.
+A hosted, guided web app where children (ages 4–8) use AI to turn their drawings into simple browser games. Runs in supervised sessions of max 20 kids, ~90 minutes each.
 
 ## Project goals
 
@@ -14,7 +14,7 @@ Three AI concepts every child should walk away with:
 ```
 kidsproject/
 ├── apps/
-│   ├── admin/          # Facilitator: create sessions, teacher dashboard
+│   ├── admin/          # Facilitator: session roster, teacher-assisted photo capture (plain UI, not kid-facing)
 │   ├── session/        # Child-facing: guided step-by-step workshop flow
 │   └── games/          # Standalone game templates (run at home, no server)
 ├── packages/
@@ -50,16 +50,28 @@ kidsproject/
 
 **Moderation is light** — word filter on free-text inputs, all prompts logged, live teacher dashboard shows every child's current prompt in real time.
 
+**Photo capture is teacher-assisted, not self-serve** — both the character drawing and the world/
+background photo are captured by a facilitator using `apps/admin` (shared-password auth, reusing
+`FACILITATOR_TOKEN`), not the child's own camera. Each child gets a random visual code (e.g.
+"🦊 Fox 12") at registration to disambiguate same-named kids on the roster. The kid's screen shows
+a waiting state, then confirms "Is this yours?" (Yes/No) once the teacher uploads a photo — a "No"
+routes back to the teacher's roster as "needs retake," the kid never gets a self-serve retake.
+
+**Character sprites generate as one sheet, not 3 separate calls** — `server/ai/openai.ts` asks for
+a single image containing all 3 poses (idle/move/celebrate) in fixed panels, then crops it with
+`sharp`, so poses stay visually consistent with each other. The collectible is still a separate
+call. The "move" pose is generated facing right so the game can mirror it for leftward movement.
+
 ## Session flow (MVP — Catcher game only)
 
-1. Child enters name on session welcome screen
+1. Child enters name on session welcome screen → gets a random display code (e.g. "🦊 Fox 12")
 2. Picks game type (Catcher, with playable demo)
-3. Draws on paper → photographs → uploads via phone
-4. Answers 2–3 structured prompts describing their character
-5. System builds AI prompt → shows it (if session config allows) → sends
-6. AI generates sprite pack → child watches progress → sees result
-7. Instant game preview with their character
-8. Optional: customize (sound assignment, light code peek)
+3. Draws on paper → a teacher/helper photographs it via `apps/admin` → child confirms "Is this yours?"
+4. Answers 4 structured prompts describing their character (what/feeling/movement/art style)
+5. System builds AI prompt → shows it (if session config allows) → sends → sprite sheet generated + cropped
+6. Instant game preview with their character
+7. Adds a World (background) — teacher-photographed drawing, or describe one in words for AI to paint
+8. Adds sound (must click "Try it!" at least once before publishing is allowed)
 9. Publishes to session gallery → plays other kids' games
 
 ## Backlog (not in MVP)
@@ -82,7 +94,7 @@ npm run dev
 
 Starts:
 - `http://localhost:3000` — session app (child-facing)
-- `http://localhost:3001` — admin app (facilitator)
+- `http://localhost:3001` — admin app (facilitator: login + roster + photo capture)
 - `http://localhost:3002` — API server
 
 ## Environment variables
@@ -91,7 +103,8 @@ Starts:
 AI_PROVIDER=openai          # openai | gemini | local
 OPENAI_API_KEY=...
 GEMINI_API_KEY=...
-FACILITATOR_TOKEN=...       # optional; if set, POST /api/sessions and DELETE /api/sessions/:id require Bearer auth
+FACILITATOR_TOKEN=...       # optional; if set, gates session create/delete, apps/admin login, and
+                             # the roster/photo-capture endpoints behind this shared password
 UPLOAD_DIR=./uploads
 ```
 

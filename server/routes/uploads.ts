@@ -14,7 +14,7 @@ const MIME_TO_EXT: Record<string, string> = {
   "image/heif": ".heif",
 };
 
-const upload = multer({
+export const upload = multer({
   storage: multer.diskStorage({
     destination: UPLOAD_DIR,
     filename: (_req, file, cb) => cb(null, `${uuid()}${MIME_TO_EXT[file.mimetype] ?? ".jpg"}`),

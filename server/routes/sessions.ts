@@ -1,6 +1,8 @@
-import { Router, type Request, type Response } from "express";
+import { Router } from "express";
 import { v4 as uuid } from "uuid";
 import db from "../db.js";
+import { checkFacilitatorAuth } from "../auth.js";
+import { upload } from "./uploads.js";
 
 export const sessionRouter = Router();
 
@@ -8,14 +10,27 @@ const ALLOWED_PROVIDERS   = ["openai", "gemini", "local"] as const;
 const ALLOWED_GAME_TYPES  = ["catcher"] as const;
 const VALID_SOUND_IDS     = new Set(["boing", "splat", "whoosh", "pop", "squeak", "roar", "giggle", "crash", ""]);
 
-function checkFacilitatorAuth(req: Request, res: Response): boolean {
-  const token = process.env.FACILITATOR_TOKEN;
-  if (!token) return true;
-  if (req.headers.authorization !== `Bearer ${token}`) {
-    res.status(401).json({ error: "Unauthorized" });
-    return false;
+// Random visual code shown to a child ("🦊 Fox 12") so a teacher can tell same-named
+// kids apart on the roster before any character/photo exists to distinguish them by.
+const ANIMALS: Array<[string, string]> = [
+  ["🦊", "Fox"], ["🦉", "Owl"], ["🐻", "Bear"], ["🐼", "Panda"], ["🦁", "Lion"],
+  ["🐯", "Tiger"], ["🐰", "Rabbit"], ["🐸", "Frog"], ["🐢", "Turtle"], ["🐧", "Penguin"],
+  ["🐨", "Koala"], ["🐬", "Dolphin"], ["🐘", "Elephant"], ["🦒", "Giraffe"], ["🦔", "Hedgehog"],
+  ["🐿️", "Squirrel"], ["🐵", "Monkey"], ["🦆", "Duck"], ["🐱", "Cat"], ["🐶", "Dog"],
+];
+
+function generateDisplayCode(sessionId: string): string {
+  const existing = new Set(
+    (db.prepare("SELECT display_code FROM children WHERE session_id = ?").all(sessionId) as
+      Array<{ display_code: string | null }>).map((r) => r.display_code)
+  );
+  for (let i = 0; i < 10; i++) {
+    const [emoji, name] = ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
+    const num  = 1 + Math.floor(Math.random() * 99);
+    const code = `${emoji} ${name} ${num}`;
+    if (!existing.has(code)) return code;
   }
-  return true;
+  return `${ANIMALS[0][0]} ${ANIMALS[0][1]} ${Date.now() % 1000}`; // fallback, effectively unique
 }
 
 // POST /api/sessions — create a new session (facilitator only)
@@ -101,10 +116,105 @@ sessionRouter.post("/:id/children", (req, res) => {
   if (!session) return res.status(404).json({ error: "Session not found" });
 
   const childId = uuid();
+  const displayCode = generateDisplayCode(req.params.id);
   db.prepare(
-    "INSERT INTO children (id, session_id, name, game_type) VALUES (?, ?, ?, ?)"
-  ).run(childId, req.params.id, name, gameType);
-  res.json({ childId });
+    "INSERT INTO children (id, session_id, name, game_type, display_code) VALUES (?, ?, ?, ?, ?)"
+  ).run(childId, req.params.id, name, gameType, displayCode);
+  res.json({ childId, displayCode });
+});
+
+// GET /api/sessions/:id/roster — live list of children + their photo-capture status
+// (facilitator only — used by the teacher-assisted capture tool in apps/admin)
+sessionRouter.get("/:id/roster", (req, res) => {
+  if (!checkFacilitatorAuth(req, res)) return;
+
+  const rows = db.prepare(`
+    SELECT c.id, c.name, c.display_code, c.game_type,
+      (SELECT status FROM photo_captures pc WHERE pc.child_id = c.id AND pc.kind = 'drawing'
+         ORDER BY pc.created_at DESC LIMIT 1) AS drawing_status,
+      (SELECT status FROM photo_captures pc WHERE pc.child_id = c.id AND pc.kind = 'world'
+         ORDER BY pc.created_at DESC LIMIT 1) AS world_status,
+      EXISTS(SELECT 1 FROM published_games pg WHERE pg.child_id = c.id) AS published
+    FROM children c
+    WHERE c.session_id = ?
+    ORDER BY c.created_at ASC
+  `).all(req.params.id) as Array<{
+    id: string; name: string; display_code: string | null; game_type: string;
+    drawing_status: string | null; world_status: string | null; published: number;
+  }>;
+
+  res.json(rows.map((r) => ({
+    childId:       r.id,
+    name:          r.name,
+    displayCode:   r.display_code,
+    gameType:      r.game_type,
+    drawingStatus: r.drawing_status ?? "none",
+    worldStatus:   r.world_status ?? "none",
+    published:     r.published === 1,
+  })));
+});
+
+// POST /api/sessions/:id/photos — teacher captures a photo for a child (facilitator only)
+// multipart/form-data: { childId, kind: "drawing"|"world", photo: File }
+sessionRouter.post("/:id/photos", upload.single("photo"), (req, res) => {
+  if (!checkFacilitatorAuth(req, res)) return;
+  if (!req.file) return res.status(400).json({ error: "No image file received" });
+
+  const { childId, kind } = req.body as { childId?: string; kind?: string };
+  if (!childId || (kind !== "drawing" && kind !== "world")) {
+    return res.status(400).json({ error: "childId and a valid kind ('drawing'|'world') are required" });
+  }
+
+  const child = db.prepare("SELECT id FROM children WHERE id = ? AND session_id = ?")
+    .get(childId, req.params.id);
+  if (!child) return res.status(404).json({ error: "Child not found in this session" });
+
+  const url = `/uploads/${req.file.filename}`;
+  db.prepare(
+    "INSERT INTO photo_captures (id, child_id, kind, url, status) VALUES (?, ?, ?, ?, 'pending_child_confirm')"
+  ).run(uuid(), childId, kind, url);
+
+  res.json({ photoId: uuid(), url });
+});
+
+// GET /api/sessions/:sessionId/children/:childId/photos/:kind — kid-facing poll for a
+// teacher-captured photo awaiting confirmation
+sessionRouter.get("/:sessionId/children/:childId/photos/:kind", (req, res) => {
+  const { kind } = req.params;
+  if (kind !== "drawing" && kind !== "world") {
+    return res.status(400).json({ error: "Invalid kind" });
+  }
+
+  const row = db.prepare(`
+    SELECT id, url, status FROM photo_captures
+    WHERE child_id = ? AND kind = ?
+    ORDER BY created_at DESC LIMIT 1
+  `).get(req.params.childId, kind) as { id: string; url: string; status: string } | undefined;
+
+  if (!row) return res.json({ status: "none" });
+  res.json({ status: row.status, url: row.url, photoId: row.id });
+});
+
+// POST /api/sessions/:sessionId/children/:childId/photos/:kind/confirm — kid-facing
+// "Is this yours?" Yes/No. Yes approves, No rejects (the teacher, not the kid, recaptures).
+sessionRouter.post("/:sessionId/children/:childId/photos/:kind/confirm", (req, res) => {
+  const { kind } = req.params;
+  if (kind !== "drawing" && kind !== "world") {
+    return res.status(400).json({ error: "Invalid kind" });
+  }
+  const { approved } = req.body as { approved?: boolean };
+
+  const row = db.prepare(`
+    SELECT id FROM photo_captures
+    WHERE child_id = ? AND kind = ? AND status = 'pending_child_confirm'
+    ORDER BY created_at DESC LIMIT 1
+  `).get(req.params.childId, kind) as { id: string } | undefined;
+
+  if (!row) return res.status(404).json({ error: "No photo awaiting confirmation" });
+
+  const status = approved ? "approved" : "rejected";
+  db.prepare("UPDATE photo_captures SET status = ? WHERE id = ?").run(status, row.id);
+  res.json({ ok: true, status });
 });
 
 // GET /api/sessions/:id/gallery — all published games in this session
@@ -150,6 +260,10 @@ sessionRouter.delete("/:id", (req, res) => {
     db.prepare("DELETE FROM published_games WHERE session_id = ?").run(req.params.id);
     db.prepare(`
       DELETE FROM sprite_versions
+      WHERE child_id IN (SELECT id FROM children WHERE session_id = ?)
+    `).run(req.params.id);
+    db.prepare(`
+      DELETE FROM photo_captures
       WHERE child_id IN (SELECT id FROM children WHERE session_id = ?)
     `).run(req.params.id);
     db.prepare("DELETE FROM children WHERE session_id = ?").run(req.params.id);

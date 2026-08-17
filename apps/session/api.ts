@@ -88,17 +88,22 @@ export async function fetchSession(sessionId: string): Promise<SessionConfig> {
   return apiFetch<SessionConfig>(`${API}/api/sessions/${sessionId}`);
 }
 
-export async function registerChild(sessionId: string, name: string): Promise<string> {
+const MOCK_ANIMALS = ["🦊 Fox", "🦉 Owl", "🐻 Bear", "🐼 Panda", "🦁 Lion"];
+
+export async function registerChild(sessionId: string, name: string): Promise<{ childId: string; displayCode: string }> {
   if (MOCK_MODE) {
     await sleep(150);
-    return `child_${Math.random().toString(36).slice(2, 8)}`;
+    const animal = MOCK_ANIMALS[Math.floor(Math.random() * MOCK_ANIMALS.length)];
+    return {
+      childId: `child_${Math.random().toString(36).slice(2, 8)}`,
+      displayCode: `${animal} ${1 + Math.floor(Math.random() * 99)}`,
+    };
   }
-  const r = await apiFetch<{ childId: string }>(`${API}/api/sessions/${sessionId}/children`, {
+  return apiFetch<{ childId: string; displayCode: string }>(`${API}/api/sessions/${sessionId}/children`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name }),
   });
-  return r.childId;
 }
 
 export async function uploadDrawing(file: File): Promise<{ drawingUrl: string; drawingBase64: string }> {
@@ -223,11 +228,58 @@ export async function generateBackground(
   });
 }
 
-export function fileToBase64(file: File): Promise<string> {
+export function fileToBase64(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload  = () => resolve((reader.result as string).split(",")[1]);
     reader.onerror = reject;
     reader.readAsDataURL(file);
+  });
+}
+
+export async function urlToBase64(url: string): Promise<string> {
+  const blob = await fetch(url).then((r) => r.blob());
+  return fileToBase64(blob);
+}
+
+export interface PhotoStatus {
+  status: "none" | "pending_child_confirm" | "approved" | "rejected";
+  url?: string;
+  photoId?: string;
+}
+
+// In mock mode there's no real teacher — simulate one showing up on the second poll
+// so the waiting → confirm screen transition is still testable without a server.
+const _mockPhotoSeen = new Set<string>();
+
+export async function fetchPhotoStatus(sessionId: string, childId: string, kind: "drawing" | "world"): Promise<PhotoStatus> {
+  if (MOCK_MODE) {
+    await sleep(200);
+    const key = `${childId}:${kind}`;
+    if (!_mockPhotoSeen.has(key)) {
+      _mockPhotoSeen.add(key);
+      return { status: "none" };
+    }
+    return {
+      status: "pending_child_confirm",
+      url: svgUrl(kind === "drawing" ? "your drawing" : "your world", kind === "drawing" ? "#FF6B35" : "#4ECDC4"),
+      photoId: `mock_${key}`,
+    };
+  }
+  return apiFetch<PhotoStatus>(`${API}/api/sessions/${sessionId}/children/${childId}/photos/${kind}`);
+}
+
+export async function confirmPhoto(
+  sessionId: string, childId: string, kind: "drawing" | "world", approved: boolean
+): Promise<{ ok: true; status: string }> {
+  if (MOCK_MODE) {
+    await sleep(150);
+    if (!approved) _mockPhotoSeen.delete(`${childId}:${kind}`);
+    return { ok: true, status: approved ? "approved" : "rejected" };
+  }
+  return apiFetch(`${API}/api/sessions/${sessionId}/children/${childId}/photos/${kind}/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ approved }),
   });
 }

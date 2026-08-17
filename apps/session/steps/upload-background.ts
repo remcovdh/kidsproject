@@ -1,5 +1,5 @@
 import type { SessionState, Step } from "../main.js";
-import { uploadDrawing, generateBackground, fileToBase64 } from "../api.js";
+import { fetchPhotoStatus, confirmPhoto, generateBackground } from "../api.js";
 
 const BG_CHIPS = [
   { v: "a sunny meadow with flowers and butterflies", l: "Meadow",     e: "🌸" },
@@ -12,128 +12,104 @@ const BG_CHIPS = [
   { v: "a volcanic lava landscape",                   l: "Volcano",    e: "🌋" },
 ];
 
+// Module scope so a stray poller from a previous mount never runs alongside a fresh
+// one — main.ts has no unmount hook, so this must be cleared on every transition.
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
 export function renderUploadBackground(
   container: HTMLElement,
   state: SessionState,
   goToStep: (step: Step, update?: Partial<SessionState>) => void
 ) {
-  let mode: "choose" | "upload" | "ai" = "choose";
-  let selectedFile: File | null = null;
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+
+  let mode: "choose" | "helper-waiting" | "helper-confirm" | "ai" = "choose";
   let selectedBgDesc = "";
+  let helperPhotoUrl = "";
 
   function draw() {
     if (mode === "choose") {
       container.innerHTML = `
         <div class="step">
-          <h1 class="step__title">Add a background! 🌄</h1>
-          <p class="step__subtitle">Give your game world a scene — draw it yourself or let AI paint it!</p>
+          <h1 class="step__title">Add your World! 🌍</h1>
+          <p class="step__subtitle">Give your game a world to play in — draw it yourself or let AI paint it!</p>
 
           <div class="game-cards" style="max-width:420px">
-            <button class="game-card game-card--available" id="mode-upload">
+            <button class="game-card game-card--available" id="mode-helper">
               <div class="game-card__icon">📸</div>
-              <p class="game-card__name">Upload my drawing</p>
-              <p class="game-card__desc">Take a photo of your own background drawing</p>
+              <p class="game-card__name">My helper will take a photo</p>
+              <p class="game-card__desc">Ask a helper to photograph your World drawing</p>
             </button>
             <button class="game-card game-card--available" id="mode-ai">
               <div class="game-card__icon">✨</div>
               <p class="game-card__name">Ask the AI!</p>
-              <p class="game-card__desc">Describe a world and AI will paint it for you</p>
+              <p class="game-card__desc">Describe a World and AI will paint it for you</p>
             </button>
           </div>
 
-          <button class="btn btn--ghost" id="skip-btn">Skip — no background →</button>
+          <button class="btn btn--ghost" id="skip-btn">Skip — no World →</button>
         </div>
       `;
-      container.querySelector("#mode-upload")?.addEventListener("click", () => { mode = "upload"; draw(); });
-      container.querySelector("#mode-ai")?.addEventListener("click",    () => { mode = "ai";     draw(); });
-      container.querySelector("#skip-btn")?.addEventListener("click",   () => goToStep("customize", { backgroundUrl: null }));
+      container.querySelector("#mode-helper")?.addEventListener("click", () => { mode = "helper-waiting"; draw(); });
+      container.querySelector("#mode-ai")?.addEventListener("click",     () => { mode = "ai";             draw(); });
+      container.querySelector("#skip-btn")?.addEventListener("click",    () => goToStep("customize", { backgroundUrl: null }));
 
-    } else if (mode === "upload") {
+    } else if (mode === "helper-waiting") {
       container.innerHTML = `
         <div class="step">
-          <h1 class="step__title">Upload your background 📸</h1>
-          <p class="step__subtitle">Take a photo of your background drawing.</p>
-
-          <label class="upload-area" id="upload-area">
-            <div class="upload-area__icon">🖼️</div>
-            <p class="upload-area__text">Tap to upload your background</p>
-            <p class="upload-area__sub">or take a photo of your drawing</p>
-            <input type="file" id="bg-input" accept="image/*" capture="environment" hidden />
-          </label>
-
-          <div class="drawing-preview" id="bg-preview" hidden>
-            <img id="bg-img" src="" alt="Your background" />
-            <button class="btn btn--ghost btn--small" id="retake-btn">Try another 🔄</button>
+          <h1 class="step__title">Upload your World 📸</h1>
+          <div class="waiting-box">
+            <div class="loading-dots"><span></span><span></span><span></span></div>
+            <p class="step__subtitle">Waiting for your helper to take a photo…</p>
           </div>
+          <button class="btn btn--ghost" id="back-btn">← Back</button>
+        </div>
+      `;
+      container.querySelector("#back-btn")?.addEventListener("click", () => {
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        mode = "choose"; draw();
+      });
+      startPolling();
 
-          <div class="error-box" id="error-box" hidden>
-            <p class="error-box__child">Something went wrong with the upload. Ask your teacher for help! 🙋</p>
-            <p class="error-box__detail" id="error-detail"></p>
+    } else if (mode === "helper-confirm") {
+      container.innerHTML = `
+        <div class="step">
+          <h1 class="step__title">Is this your World? 🖼️</h1>
+          <div class="drawing-preview">
+            <img src="${helperPhotoUrl}" alt="Your World" />
           </div>
-
           <div class="step__actions">
-            <button class="btn btn--ghost" id="back-btn">← Back</button>
-            <button class="btn btn--primary btn--big" id="next-btn" disabled>Use this background! →</button>
+            <button class="btn btn--ghost btn--big" id="no-btn">No 🙅</button>
+            <button class="btn btn--primary btn--big" id="yes-btn">Yes, that's mine! ✅</button>
           </div>
         </div>
       `;
 
-      const fileInput   = container.querySelector<HTMLInputElement>("#bg-input")!;
-      const uploadArea  = container.querySelector<HTMLElement>("#upload-area")!;
-      const preview     = container.querySelector<HTMLElement>("#bg-preview")!;
-      const bgImg       = container.querySelector<HTMLImageElement>("#bg-img")!;
-      const retakeBtn   = container.querySelector<HTMLButtonElement>("#retake-btn")!;
-      const nextBtn     = container.querySelector<HTMLButtonElement>("#next-btn")!;
-      const errorBox    = container.querySelector<HTMLElement>("#error-box")!;
-      const errorDetail = container.querySelector<HTMLElement>("#error-detail")!;
+      const yesBtn = container.querySelector<HTMLButtonElement>("#yes-btn")!;
+      const noBtn  = container.querySelector<HTMLButtonElement>("#no-btn")!;
 
-      fileInput.addEventListener("change", () => {
-        const file = fileInput.files?.[0];
-        if (!file) return;
-        selectedFile = file;
-        bgImg.src = URL.createObjectURL(file);
-        uploadArea.hidden = true;
-        preview.hidden = false;
-        nextBtn.disabled = false;
+      yesBtn.addEventListener("click", async () => {
+        yesBtn.disabled = true;
+        noBtn.disabled  = true;
+        await confirmPhoto(state.sessionId, state.childId ?? "", "world", true);
+        const existing = JSON.parse(localStorage.getItem("kidsproject_sprites") ?? "{}");
+        localStorage.setItem("kidsproject_sprites", JSON.stringify({ ...existing, background: helperPhotoUrl }));
+        goToStep("preview-game", { backgroundUrl: helperPhotoUrl, previewContext: "background" });
       });
 
-      retakeBtn.addEventListener("click", () => {
-        selectedFile = null;
-        fileInput.value = "";
-        uploadArea.hidden = false;
-        preview.hidden = true;
-        nextBtn.disabled = true;
-      });
-
-      container.querySelector("#back-btn")?.addEventListener("click", () => { mode = "choose"; draw(); });
-
-      nextBtn.addEventListener("click", async () => {
-        if (!selectedFile) return;
-        nextBtn.disabled = true;
-        nextBtn.textContent = "Uploading... ⏳";
-        errorBox.hidden = true;
-        try {
-          const result = await uploadDrawing(selectedFile);
-          const existing = JSON.parse(localStorage.getItem("kidsproject_sprites") ?? "{}");
-          localStorage.setItem("kidsproject_sprites", JSON.stringify({ ...existing, background: result.drawingUrl }));
-          goToStep("preview-game", { backgroundUrl: result.drawingUrl, previewContext: "background" });
-        } catch (err) {
-          console.error("[upload-background]", err);
-          nextBtn.disabled = false;
-          nextBtn.textContent = "Use this background! →";
-          errorDetail.textContent = err instanceof Error ? err.message : String(err);
-          errorBox.hidden = false;
-        }
+      noBtn.addEventListener("click", async () => {
+        yesBtn.disabled = true;
+        noBtn.disabled  = true;
+        await confirmPhoto(state.sessionId, state.childId ?? "", "world", false);
+        mode = "helper-waiting";
+        draw();
       });
 
     } else {
-      // AI generation mode — supports text prompt, optional inspiration photo, and style alignment
-      const d = state.characterDescription;
-      const charStyleText = d ? `a ${d.feeling} ${d.what} that moves in a ${d.movement} way` : "";
-
+      // AI generation mode — pick a preset World or describe your own in words
       container.innerHTML = `
         <div class="step step--describe">
-          <h1 class="step__title">What world do you want? ✨</h1>
+          <h1 class="step__title">What World do you want? ✨</h1>
           <p class="step__subtitle">Pick one or describe your own!</p>
 
           <div class="chip-group" id="bg-chips">
@@ -143,75 +119,42 @@ export function renderUploadBackground(
                 <span class="chip__label">${c.l}</span>
               </button>`).join("")}
             <input class="chip-custom" id="bg-custom" type="text"
-              placeholder="or describe your own world..." maxlength="80"
+              placeholder="or describe your own World..." maxlength="80"
               value="${selectedBgDesc && !BG_CHIPS.find(c => c.v === selectedBgDesc) ? selectedBgDesc : ""}" />
           </div>
 
-          <div class="inspiration-section">
-            <button class="btn btn--ghost btn--small" id="inspiration-toggle">
-              📸 Add a photo as inspiration (optional)
-            </button>
-            <div id="inspiration-body" hidden style="margin-top:.75rem">
-              <label class="upload-area upload-area--small" id="inspiration-upload-area">
-                <div class="upload-area__icon" style="font-size:1.6rem">🖼️</div>
-                <p class="upload-area__text" style="font-size:.9rem">Tap to add a photo</p>
-                <input type="file" id="inspiration-input" accept="image/*" capture="environment" hidden />
-              </label>
-              <div id="inspiration-preview" hidden style="display:flex;flex-direction:column;align-items:center;gap:.5rem;margin-top:.5rem">
-                <img id="inspiration-img" src="" alt="Inspiration" class="drawing-source__img" />
-                <button class="btn btn--ghost btn--small" id="remove-inspiration-btn">Remove ✕</button>
-              </div>
-            </div>
-          </div>
-
-          ${charStyleText ? `
-          <label class="checkbox-row" style="margin-top:.75rem">
-            <input type="checkbox" id="style-match-cb" />
-            <span>Match my character's style ✨</span>
-          </label>` : ""}
-
           <div class="drawing-preview" id="bg-result" hidden>
-            <img id="bg-result-img" src="" alt="Generated background" style="max-width:100%;border-radius:var(--radius)" />
+            <img id="bg-result-img" src="" alt="Generated World" style="max-width:100%;border-radius:var(--radius-hero)" />
             <button class="btn btn--ghost btn--small" id="retry-bg-btn">Try a different description 🔄</button>
           </div>
 
           <div class="error-box" id="error-box" hidden>
-            <p class="error-box__child">The AI couldn't paint the background. Ask your teacher for help! 🙋</p>
+            <p class="error-box__child">The AI couldn't paint the World. Ask your teacher for help! 🙋</p>
             <p class="error-box__detail" id="error-detail"></p>
           </div>
 
           <div class="step__actions">
             <button class="btn btn--ghost" id="back-btn">← Back</button>
             <button class="btn btn--primary btn--big" id="generate-btn" disabled>Paint it! ✨</button>
-            <button class="btn btn--primary btn--big" id="use-btn" hidden>Use this background! →</button>
+            <button class="btn btn--primary btn--big" id="use-btn" hidden>Use this World! →</button>
           </div>
         </div>
       `;
 
-      const generateBtn        = container.querySelector<HTMLButtonElement>("#generate-btn")!;
-      const useBtn             = container.querySelector<HTMLButtonElement>("#use-btn")!;
-      const resultBox          = container.querySelector<HTMLElement>("#bg-result")!;
-      const resultImg          = container.querySelector<HTMLImageElement>("#bg-result-img")!;
-      const errorBox           = container.querySelector<HTMLElement>("#error-box")!;
-      const errorDetail        = container.querySelector<HTMLElement>("#error-detail")!;
-      const customInput        = container.querySelector<HTMLInputElement>("#bg-custom")!;
-      const inspirationToggle  = container.querySelector<HTMLButtonElement>("#inspiration-toggle")!;
-      const inspirationBody    = container.querySelector<HTMLElement>("#inspiration-body")!;
-      const inspirationArea    = container.querySelector<HTMLElement>("#inspiration-upload-area")!;
-      const inspirationInput   = container.querySelector<HTMLInputElement>("#inspiration-input")!;
-      const inspirationPreview = container.querySelector<HTMLElement>("#inspiration-preview")!;
-      const inspirationImg     = container.querySelector<HTMLImageElement>("#inspiration-img")!;
-      const removeInspirationBtn = container.querySelector<HTMLButtonElement>("#remove-inspiration-btn");
-      const styleMatchCb       = container.querySelector<HTMLInputElement>("#style-match-cb");
+      const generateBtn = container.querySelector<HTMLButtonElement>("#generate-btn")!;
+      const useBtn       = container.querySelector<HTMLButtonElement>("#use-btn")!;
+      const resultBox    = container.querySelector<HTMLElement>("#bg-result")!;
+      const resultImg    = container.querySelector<HTMLImageElement>("#bg-result-img")!;
+      const errorBox     = container.querySelector<HTMLElement>("#error-box")!;
+      const errorDetail  = container.querySelector<HTMLElement>("#error-detail")!;
+      const customInput  = container.querySelector<HTMLInputElement>("#bg-custom")!;
 
-      let inspirationFile: File | null = null;
       let generatedUrl = "";
 
       function updateGenerateBtn() {
-        generateBtn.disabled = !selectedBgDesc.trim() && !inspirationFile;
+        generateBtn.disabled = !selectedBgDesc.trim();
       }
 
-      // Chip selection
       container.querySelectorAll<HTMLButtonElement>(".chip").forEach((chip) => {
         chip.addEventListener("click", () => {
           container.querySelectorAll(".chip").forEach(c => c.classList.remove("chip--active"));
@@ -230,44 +173,15 @@ export function renderUploadBackground(
 
       if (selectedBgDesc) updateGenerateBtn();
 
-      // Inspiration photo toggle
-      inspirationToggle.addEventListener("click", () => {
-        const expanded = !inspirationBody.hidden;
-        inspirationBody.hidden = expanded;
-        inspirationToggle.textContent = expanded
-          ? "📸 Add a photo as inspiration (optional)"
-          : "📸 Hide inspiration photo ▲";
-      });
-
-      inspirationInput.addEventListener("change", () => {
-        const file = inspirationInput.files?.[0];
-        if (!file) return;
-        inspirationFile = file;
-        inspirationImg.src = URL.createObjectURL(file);
-        inspirationArea.hidden = true;
-        inspirationPreview.hidden = false;
-        updateGenerateBtn();
-      });
-
-      removeInspirationBtn?.addEventListener("click", () => {
-        inspirationFile = null;
-        inspirationInput.value = "";
-        inspirationArea.hidden = false;
-        inspirationPreview.hidden = true;
-        updateGenerateBtn();
-      });
-
-      // Navigation
       container.querySelector("#back-btn")?.addEventListener("click", () => { mode = "choose"; draw(); });
 
       container.querySelector("#retry-bg-btn")?.addEventListener("click", () => {
         resultBox.hidden = true;
         useBtn.hidden = true;
         generateBtn.hidden = false;
-        generateBtn.disabled = !selectedBgDesc.trim() && !inspirationFile;
+        generateBtn.disabled = !selectedBgDesc.trim();
       });
 
-      // Generate
       generateBtn.addEventListener("click", async () => {
         generateBtn.disabled = true;
         generateBtn.textContent = "Painting... ✨ (this takes ~15 seconds)";
@@ -276,9 +190,7 @@ export function renderUploadBackground(
 
         try {
           const aiProvider = state.sessionConfig?.aiProvider ?? "openai";
-          const imageBase64 = inspirationFile ? await fileToBase64(inspirationFile) : undefined;
-          const styleDescription = styleMatchCb?.checked ? charStyleText : undefined;
-          const { backgroundUrl } = await generateBackground(selectedBgDesc, aiProvider, imageBase64, styleDescription);
+          const { backgroundUrl } = await generateBackground(selectedBgDesc, aiProvider);
           generatedUrl = backgroundUrl;
           if (backgroundUrl) {
             resultImg.src = backgroundUrl;
@@ -301,6 +213,24 @@ export function renderUploadBackground(
         goToStep("preview-game", { backgroundUrl: generatedUrl || null, previewContext: "background" });
       });
     }
+  }
+
+  function startPolling() {
+    const check = async () => {
+      try {
+        const res = await fetchPhotoStatus(state.sessionId, state.childId ?? "", "world");
+        if (res.status === "pending_child_confirm" && res.url) {
+          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          helperPhotoUrl = res.url;
+          mode = "helper-confirm";
+          draw();
+        }
+      } catch (err) {
+        console.error("[upload-background poll]", err);
+      }
+    };
+    check();
+    pollTimer = setInterval(check, 3000);
   }
 
   draw();

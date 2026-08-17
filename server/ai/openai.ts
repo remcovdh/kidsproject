@@ -1,11 +1,16 @@
 import OpenAI from "openai";
+import sharp from "sharp";
 import type { ServerAiProvider, SpriteBuffers, SpriteFile } from "./index.js";
 
 const POSE_PROMPTS: Record<Exclude<keyof SpriteBuffers, "collectible">, string> = {
   idle:      "standing still, relaxed, neutral upright pose, arms at sides",
-  move:      "running or sliding sideways, dynamic movement, legs in mid-stride",
+  move:      "running or sliding sideways, dynamic movement, legs in mid-stride, facing and moving toward the RIGHT",
   celebrate: "cheering with both arms raised in victory, mouth open in a big smile",
 };
+
+// Order the 3 poses appear left-to-right in the generated sprite sheet.
+const SHEET_POSE_ORDER: Array<Exclude<keyof SpriteBuffers, "collectible">> = ["idle", "move", "celebrate"];
+const PANEL_SIZE = 512;
 
 const provider: ServerAiProvider = {
   async generateSprites(description: string, drawingBase64: string, styleMode?: "shape" | "copy", artStyle?: string): Promise<SpriteBuffers> {
@@ -39,28 +44,43 @@ const provider: ServerAiProvider = {
       ? "Preserve the EXACT childlike art style, rough hand-drawn quality, and original colors from the drawing. Do not clean up or professionalize the look — keep it looking like the child's own style."
       : `Render as a clean ${artStyle ?? "cartoon"} game sprite. Use the character's SHAPE and distinctive features from the drawing, but apply a fresh ${artStyle ?? "cartoon"} art style with bold outlines and bright colors. Do NOT copy the drawing's coloring or rough style.`;
 
-    // Generate all 3 character poses + the collectible item in parallel.
-    const poses = Object.entries(POSE_PROMPTS) as [Exclude<keyof SpriteBuffers, "collectible">, string][];
+    // Generate all 3 character poses as ONE sprite-sheet image (instead of 3 independent
+    // calls) so the poses stay visually consistent with each other — same colors, shape,
+    // and proportions — then crop the sheet into 3 separate sprite files. The collectible
+    // has no pose-consistency requirement, so it stays a separate call, run in parallel.
+    const sheetPrompt =
+      `2D video game character sprite sheet, exactly 3 square panels arranged left-to-right ` +
+      `in the TOP HALF of the image only (a 3-panel comic-strip layout), each panel ${PANEL_SIZE}x${PANEL_SIZE}, ` +
+      `with the bottom half of the image left blank/transparent. ` +
+      `CHARACTER (keep IDENTICAL across all 3 panels — same shape, colors, face, and design): ${characterSheet}. ` +
+      `STYLE: ${styleInstruction} ` +
+      `PANEL 1 (leftmost): ${POSE_PROMPTS.idle}. ` +
+      `PANEL 2 (middle): ${POSE_PROMPTS.move}. ` +
+      `PANEL 3 (rightmost): ${POSE_PROMPTS.celebrate}. ` +
+      `Transparent background, no text, no watermark, no panel numbers/labels, PNG.`;
 
     const [poseEntries, collectibleFile] = await Promise.all([
-      Promise.all(poses.map(async ([pose, posePrompt]) => {
+      (async () => {
         const response = await client.images.generate({
           model: "gpt-image-1",
-          prompt:
-            `2D video game character sprite. ` +
-            `CHARACTER (keep IDENTICAL across all poses — same shape, colors, face, and design): ${characterSheet}. ` +
-            `STYLE: ${styleInstruction} ` +
-            `POSE: ${posePrompt}. ` +
-            `Transparent background, centered, no text, square format, PNG.`,
-          size: "1024x1024",
+          prompt: sheetPrompt,
+          size: "1536x1024",
           quality: "medium",
           background: "transparent",
           n: 1,
         });
         const b64 = response.data?.[0]?.b64_json;
-        if (!b64) throw new Error(`No image data returned for pose: ${pose}`);
-        return [pose, { data: Buffer.from(b64, "base64"), ext: "png" }] as const;
-      })),
+        if (!b64) throw new Error("No image data returned for sprite sheet");
+        const sheetBuffer = Buffer.from(b64, "base64");
+
+        return Promise.all(SHEET_POSE_ORDER.map(async (pose, i) => {
+          const cropped = await sharp(sheetBuffer)
+            .extract({ left: i * PANEL_SIZE, top: 0, width: PANEL_SIZE, height: PANEL_SIZE })
+            .png()
+            .toBuffer();
+          return [pose, { data: cropped, ext: "png" }] as const;
+        }));
+      })(),
 
       (async (): Promise<SpriteFile> => {
         const response = await client.images.generate({

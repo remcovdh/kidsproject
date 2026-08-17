@@ -7,13 +7,13 @@ export function renderPreviewGame(
 ) {
   const ctx = state.previewContext ?? "character";
 
-  const backLabel = ctx === "background" ? "← Change background"
+  const backLabel = ctx === "background" ? "← Change World"
     : ctx === "sounds"     ? "← Change sounds"
     : "← Change character";
 
-  const nextLabel = ctx === "background" ? "I love it! Add sounds →"
+  const nextLabel = ctx === "background" ? "I love it! Add sound →"
     : ctx === "sounds"     ? "Looks great! Put it on the wall! 🚀"
-    : "I love it! Add a background →";
+    : "I love it! Add a World →";
 
   container.innerHTML = `
     <div class="step step--preview">

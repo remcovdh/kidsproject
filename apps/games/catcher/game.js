@@ -51,6 +51,7 @@ const state = {
   keys:      {},
   pose:      "idle",   // "idle" | "move" | "action" | "celebrate"
   poseTimer: 0,        // frames remaining for temporary pose
+  facing:    "right",  // "left" | "right" — the move sprite is drawn facing right, mirrored when facing left
 };
 
 const images = {};
@@ -111,6 +112,7 @@ function restartGame() {
   state.frame     = 0;
   state.pose      = "idle";
   state.poseTimer = 0;
+  state.facing    = "right";
   state.catcher.x = W / 2 - CATCHER_W / 2;
   stopBtn.hidden   = false;
   replayBtn.hidden = true;
@@ -131,10 +133,14 @@ function update() {
     state.pose = "idle";
   }
 
-  if (state.keys["ArrowLeft"])
+  if (state.keys["ArrowLeft"]) {
     state.catcher.x = Math.max(0, state.catcher.x - CATCHER_SPD);
-  if (state.keys["ArrowRight"])
+    state.facing = "left";
+  }
+  if (state.keys["ArrowRight"]) {
     state.catcher.x = Math.min(W - CATCHER_W, state.catcher.x + CATCHER_SPD);
+    state.facing = "right";
+  }
 
   if (state.frame % getSpawnEvery(state.frame) === 0) spawnFaller();
 
@@ -189,11 +195,21 @@ function drawFallers() {
 function drawCatcher() {
   // Use the pose-specific sprite; fall back to idle if the image didn't load
   const img = images[`character_${state.pose}`] ?? images.character_idle;
-  if (img) {
-    ctx.drawImage(img, state.catcher.x, state.catcher.y, CATCHER_W, CATCHER_H);
-  } else {
+  if (!img) {
     ctx.fillStyle = "#4ECDC4";
     ctx.fillRect(state.catcher.x, state.catcher.y, CATCHER_W, CATCHER_H);
+    return;
+  }
+  // The "move" sprite is generated facing right, so mirror it when moving left.
+  // Idle/celebrate poses are left as generated — no facing requirement for those.
+  if (state.pose === "move" && state.facing === "left") {
+    ctx.save();
+    ctx.translate(state.catcher.x + CATCHER_W, state.catcher.y);
+    ctx.scale(-1, 1);
+    ctx.drawImage(img, 0, 0, CATCHER_W, CATCHER_H);
+    ctx.restore();
+  } else {
+    ctx.drawImage(img, state.catcher.x, state.catcher.y, CATCHER_W, CATCHER_H);
   }
 }
 

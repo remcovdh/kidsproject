@@ -2,13 +2,13 @@ import type { SessionState, Step } from "../main.js";
 import { registerChild } from "../api.js";
 
 const STEPS = [
-  { emoji: "✏️", label: "Draw",       desc: "Draw your character on paper" },
-  { emoji: "📸", label: "Photo",      desc: "Take a photo of your drawing" },
-  { emoji: "🤖", label: "AI magic",   desc: "AI turns it into a game character" },
-  { emoji: "🎮", label: "Play!",      desc: "Play your very own game" },
-  { emoji: "🌄", label: "Background", desc: "Add a cool background world" },
-  { emoji: "🔊", label: "Sounds",     desc: "Pick fun sounds for your game" },
-  { emoji: "🚀", label: "Share!",     desc: "Put it on the wall for everyone" },
+  { emoji: "🎨", label: "Make character", desc: "Draw and bring your character to life with AI" },
+  { emoji: "🎮", label: "Test & play",    desc: "Try your character in the game" },
+  { emoji: "🌍", label: "Add World",      desc: "Pick or paint a world to play in" },
+  { emoji: "🎮", label: "Test & play",    desc: "See your world in the game" },
+  { emoji: "🔊", label: "Add sound",      desc: "Pick fun sounds for your game" },
+  { emoji: "🎮", label: "Test & play",    desc: "Hear your sounds in the game" },
+  { emoji: "🚀", label: "Share!",         desc: "Put it on the wall for everyone" },
 ];
 
 export function renderWelcome(
@@ -52,8 +52,8 @@ export function renderWelcome(
     const name = input.value.trim();
     btn.disabled = true;
     btn.textContent = "Starting... 🎈";
-    const childId = await registerChild(state.sessionId, name);
-    goToStep("pick-game", { childName: name, childId });
+    const { childId, displayCode } = await registerChild(state.sessionId, name);
+    goToStep("pick-game", { childName: name, childId, childDisplayCode: displayCode });
   });
 
   input.focus();

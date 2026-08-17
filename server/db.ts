@@ -50,7 +50,25 @@ db.exec(`
     background_url    TEXT,
     published_at      TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS photo_captures (
+    id         TEXT PRIMARY KEY,
+    child_id   TEXT NOT NULL REFERENCES children(id),
+    kind       TEXT NOT NULL CHECK (kind IN ('drawing','world')),
+    url        TEXT NOT NULL,
+    status     TEXT NOT NULL DEFAULT 'pending_child_confirm'
+               CHECK (status IN ('pending_child_confirm','approved','rejected')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_photo_captures_child ON photo_captures(child_id, kind);
 `);
+
+// Idempotent migration: add children.display_code if it doesn't exist yet
+// (no migration framework in this project — see the CREATE TABLE IF NOT EXISTS style above).
+const childCols = db.prepare("PRAGMA table_info(children)").all() as Array<{ name: string }>;
+if (!childCols.some((c) => c.name === "display_code")) {
+  db.exec("ALTER TABLE children ADD COLUMN display_code TEXT");
+}
 
 // Seed a demo session on first run.
 // AI_PROVIDER env var sets (and on every restart updates) the demo session's provider,

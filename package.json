@@ -7,7 +7,7 @@
     "server"
   ],
   "scripts": {
-    "dev": "concurrently --names server,session \"npm run dev -w @kidsproject/server\" \"npm run dev -w @kidsproject/session\"",
+    "dev": "concurrently --names server,session,admin \"npm run dev -w @kidsproject/server\" \"npm run dev -w @kidsproject/session\" \"npm run dev -w @kidsproject/admin\"",
     "build": "npm run build -w @kidsproject/session",
     "typecheck": "tsc --build"
   },

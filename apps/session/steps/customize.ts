@@ -27,6 +27,11 @@ function persistSoundAssignments(sounds: Record<string, string>) {
   }));
 }
 
+// Module scope (not per-render) so it survives a preview-game round-trip within the
+// same session — apps/session never remounts main.ts's state, so this behaves like
+// any other piece of session state without needing a new SessionState field.
+let hasPlayedSounds = false;
+
 export function renderCustomize(
   container: HTMLElement,
   state: SessionState,
@@ -37,7 +42,7 @@ export function renderCustomize(
   function draw() {
     container.innerHTML = `
       <div class="step step--customize">
-        <h1 class="step__title">Make it yours! 🎨</h1>
+        <h1 class="step__title">Add sound! 🔊</h1>
 
         <div class="sound-section">
           <h2 class="section-title">Pick your sounds</h2>
@@ -58,21 +63,10 @@ export function renderCustomize(
             </div>`).join("")}
         </div>
 
-        <div class="code-peek-wrap">
-          <button class="btn btn--ghost btn--small" id="peek-btn">👀 How does this work?</button>
-          <pre class="code-peek" id="code-peek" hidden>// When your character catches something:
-if (caught) {
-  score = score + 1;
-  ${sounds["catch"] ? `playSound("${sounds["catch"]}");` : "// (no catch sound selected)"}
-}
-
-// Score keeps adding up — can you get 10?</pre>
-        </div>
-
         <div class="step__actions">
           <button class="btn btn--ghost" id="back-btn">← Back</button>
           <button class="btn btn--ghost" id="try-btn">🎮 Try it!</button>
-          <button class="btn btn--primary btn--big" id="next-btn">Put it on the wall! 🚀</button>
+          <button class="btn btn--primary btn--big" id="next-btn" ${hasPlayedSounds ? "" : "disabled"}>Put it on the wall! 🚀</button>
         </div>
       </div>
     `;
@@ -91,16 +85,12 @@ if (caught) {
       });
     });
 
-    container.querySelector("#peek-btn")?.addEventListener("click", () => {
-      const pre = container.querySelector<HTMLElement>("#code-peek")!;
-      pre.hidden = !pre.hidden;
-    });
-
     container.querySelector("#back-btn")?.addEventListener("click", () => {
       goToStep("preview-game", { previewContext: "background" });
     });
 
     container.querySelector("#try-btn")?.addEventListener("click", () => {
+      hasPlayedSounds = true;
       persistSoundAssignments(sounds);
       goToStep("preview-game", { soundAssignments: sounds, previewContext: "sounds" });
     });

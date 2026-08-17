@@ -1,91 +1,104 @@
 import type { SessionState, Step } from "../main.js";
-import { uploadDrawing } from "../api.js";
+import { fetchPhotoStatus, confirmPhoto, urlToBase64 } from "../api.js";
+
+// Module scope so a stray poller from a previous mount of this screen never runs
+// alongside a fresh one — main.ts has no unmount hook, so this must be cleared
+// explicitly on every transition away from the waiting phase.
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 export function renderUploadDrawing(
   container: HTMLElement,
   state: SessionState,
   goToStep: (step: Step, update?: Partial<SessionState>) => void
 ) {
-  container.innerHTML = `
-    <div class="step">
-      <h1 class="step__title">Draw your character! ✏️</h1>
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 
-      <div class="explain-cards">
-        <div class="explain-card">
-          <div class="explain-card__emoji">✏️</div>
-          <p class="explain-card__text">Draw <strong>any character</strong> you like on paper — a monster, animal, superhero, anything!</p>
+  type Phase = "waiting" | "confirm";
+  let phase: Phase = "waiting";
+  let photoUrl = "";
+
+  function draw() {
+    if (phase === "waiting") renderWaiting();
+    else renderConfirm();
+  }
+
+  function renderWaiting() {
+    container.innerHTML = `
+      <div class="step">
+        <h1 class="step__title">Draw your character! ✏️</h1>
+
+        <div class="explain-cards">
+          <div class="explain-card">
+            <div class="explain-card__emoji">✏️</div>
+            <p class="explain-card__text">Draw <strong>any character</strong> you like on paper!</p>
+          </div>
+          <div class="explain-card explain-card--arrow">→</div>
+          <div class="explain-card">
+            <div class="explain-card__emoji">🙋</div>
+            <p class="explain-card__text">Ask a <strong>helper</strong> to take a photo of it</p>
+          </div>
         </div>
-        <div class="explain-card explain-card--arrow">→</div>
-        <div class="explain-card">
-          <div class="explain-card__emoji">🎮</div>
-          <p class="explain-card__text">Your drawing becomes the <strong>main character</strong> in your very own game!</p>
+
+        <div class="waiting-box">
+          <div class="loading-dots"><span></span><span></span><span></span></div>
+          <p class="step__subtitle">Waiting for your helper to take a photo…</p>
         </div>
       </div>
+    `;
+    startPolling();
+  }
 
-      <p class="step__subtitle">When your drawing is ready, take a photo of it 📸</p>
+  function startPolling() {
+    const check = async () => {
+      try {
+        const res = await fetchPhotoStatus(state.sessionId, state.childId ?? "", "drawing");
+        if (res.status === "pending_child_confirm" && res.url) {
+          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          photoUrl = res.url;
+          phase = "confirm";
+          draw();
+        }
+      } catch (err) {
+        console.error("[upload-drawing poll]", err);
+      }
+    };
+    check();
+    pollTimer = setInterval(check, 3000);
+  }
 
-      <label class="upload-area" id="upload-area">
-        <div class="upload-area__icon">📷</div>
-        <p class="upload-area__text">Tap here to take a photo</p>
-        <p class="upload-area__sub">or choose from your gallery</p>
-        <input type="file" id="file-input" accept="image/*" capture="environment" hidden />
-      </label>
-
-      <div class="drawing-preview" id="drawing-preview" hidden>
-        <img id="preview-img" src="" alt="Your drawing" />
-        <button class="btn btn--ghost btn--small" id="retake-btn">Take another photo 🔄</button>
+  function renderConfirm() {
+    container.innerHTML = `
+      <div class="step">
+        <h1 class="step__title">Is this your drawing? 🖼️</h1>
+        <div class="drawing-preview">
+          <img src="${photoUrl}" alt="Your drawing" />
+        </div>
+        <div class="step__actions">
+          <button class="btn btn--ghost btn--big" id="no-btn">No 🙅</button>
+          <button class="btn btn--primary btn--big" id="yes-btn">Yes, that's mine! ✅</button>
+        </div>
       </div>
+    `;
 
-      <button class="btn btn--primary btn--big" id="next-btn" disabled>That's my drawing! →</button>
-      <div class="error-box" id="error-box" hidden>
-        <p class="error-box__child">Something went wrong with the upload. Ask your teacher for help! 🙋</p>
-        <p class="error-box__detail" id="error-detail"></p>
-      </div>
-    </div>
-  `;
+    const yesBtn = container.querySelector<HTMLButtonElement>("#yes-btn")!;
+    const noBtn  = container.querySelector<HTMLButtonElement>("#no-btn")!;
 
-  const fileInput   = container.querySelector<HTMLInputElement>("#file-input")!;
-  const preview     = container.querySelector<HTMLElement>("#drawing-preview")!;
-  const previewImg  = container.querySelector<HTMLImageElement>("#preview-img")!;
-  const retakeBtn   = container.querySelector<HTMLButtonElement>("#retake-btn")!;
-  const nextBtn     = container.querySelector<HTMLButtonElement>("#next-btn")!;
-  const errorBox    = container.querySelector<HTMLElement>("#error-box")!;
-  const errorDetail = container.querySelector<HTMLElement>("#error-detail")!;
-  const uploadArea  = container.querySelector<HTMLElement>("#upload-area")!;
-  let selectedFile: File | null = null;
+    yesBtn.addEventListener("click", async () => {
+      yesBtn.disabled = true;
+      noBtn.disabled  = true;
+      await confirmPhoto(state.sessionId, state.childId ?? "", "drawing", true);
+      const drawingBase64 = await urlToBase64(photoUrl);
+      goToStep("describe-character", { drawingUrl: photoUrl, drawingBase64 });
+    });
 
-  fileInput.addEventListener("change", () => {
-    const file = fileInput.files?.[0];
-    if (!file) return;
-    selectedFile = file;
-    previewImg.src = URL.createObjectURL(file);
-    uploadArea.hidden = true;
-    preview.hidden = false;
-    nextBtn.disabled = false;
-  });
+    noBtn.addEventListener("click", async () => {
+      yesBtn.disabled = true;
+      noBtn.disabled  = true;
+      await confirmPhoto(state.sessionId, state.childId ?? "", "drawing", false);
+      phase = "waiting";
+      draw();
+    });
+  }
 
-  retakeBtn.addEventListener("click", () => {
-    selectedFile = null;
-    fileInput.value = "";
-    uploadArea.hidden = false;
-    preview.hidden = true;
-    nextBtn.disabled = true;
-  });
-
-  nextBtn.addEventListener("click", async () => {
-    if (!selectedFile) return;
-    nextBtn.disabled = true;
-    nextBtn.textContent = "Uploading... ⏳";
-    errorBox.hidden = true;
-    try {
-      const result = await uploadDrawing(selectedFile);
-      goToStep("describe-character", { drawingUrl: result.drawingUrl, drawingBase64: result.drawingBase64 });
-    } catch (err) {
-      console.error("[upload-drawing]", err);
-      nextBtn.disabled = false;
-      nextBtn.textContent = "That's my drawing! →";
-      errorDetail.textContent = err instanceof Error ? err.message : String(err);
-      errorBox.hidden = false;
-    }
-  });
+  draw();
 }

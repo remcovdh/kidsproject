@@ -1,15 +1,6 @@
 import type { SessionState, Step } from "../main.js";
 import { generateSprites, uploadDrawing, type SpriteVersion } from "../api.js";
 
-const ART_STYLES = [
-  { id: "cartoon",                  label: "Cartoon",    emoji: "🎨" },
-  { id: "watercolor painting",      label: "Watercolor", emoji: "🌊" },
-  { id: "pixel art",                label: "Pixel",      emoji: "⚡" },
-  { id: "comic book",               label: "Comic",      emoji: "🦸" },
-  { id: "kawaii cute",              label: "Kawaii",     emoji: "🐱" },
-  { id: "children's storybook",     label: "Storybook",  emoji: "📖" },
-];
-
 function characterDesc(state: SessionState): string {
   const d = state.characterDescription ?? { what: "character", feeling: "happy", movement: "bouncy" };
   return `A ${d.feeling} ${d.what} that moves in a ${d.movement} way`;
@@ -71,77 +62,17 @@ export function renderGenerateSprites(
 ) {
   const desc = characterDesc(state);
   const show = state.sessionConfig?.showPrompt ?? false;
+  const styleMode: "shape" | "copy" = state.characterDescription?.styleMode ?? "shape";
+  const artStyle = state.characterDescription?.artStyle ?? "cartoon";
 
-  type Phase = "pick-style" | "loading" | "result";
-  let phase: Phase = "pick-style";
-  // "shape" = extract shape from drawing, apply chosen game-art style (default)
-  // "copy"  = also copy the drawing's exact colors and rough style
-  let styleMode: "shape" | "copy" = "shape";
-  let artStyle = "cartoon"; // pre-selected default
+  type Phase = "loading" | "result";
+  let phase: Phase = "loading";
   let versions = [...state.spriteVersions];
   let currentVersion: SpriteVersion | null = null;
 
   function draw() {
-    if (phase === "pick-style") renderStylePicker();
-    else if (phase === "loading") renderLoading();
+    if (phase === "loading") renderLoading();
     else renderResult();
-  }
-
-  function renderStylePicker() {
-    const drawingThumb = state.drawingUrl
-      ? `<div class="drawing-source">
-           <p class="drawing-source__label">Your drawing:</p>
-           <img src="${state.drawingUrl}" alt="Your drawing" class="drawing-source__img" />
-         </div>`
-      : "";
-    container.innerHTML = `
-      <div class="step step--generate">
-        <h1 class="step__title">How should it look? 🎨</h1>
-        ${drawingThumb}
-        <p class="step__subtitle">The AI will use the shape of your drawing. Pick how it should look!</p>
-
-        <div class="style-picker">
-          <button class="style-option ${styleMode === "shape" ? "style-option--active" : ""}" id="style-shape">
-            <div class="style-option__icon">🎮</div>
-            <p class="style-option__name">Game character</p>
-            <p class="style-option__desc">AI uses your shape and makes a clean game sprite</p>
-          </button>
-          <button class="style-option ${styleMode === "copy" ? "style-option--active" : ""}" id="style-copy">
-            <div class="style-option__icon">✏️</div>
-            <p class="style-option__name">Keep my style</p>
-            <p class="style-option__desc">AI also copies my drawing's colors and look</p>
-          </button>
-        </div>
-
-        <div id="art-style-picker" ${styleMode !== "shape" ? "hidden" : ""} style="width:100%;text-align:left">
-          <p class="describe-label" style="margin-bottom:.5rem">Pick a look:</p>
-          <div class="chip-group">
-            ${ART_STYLES.map((s) => `
-              <button class="chip ${artStyle === s.id ? "chip--active" : ""}" data-style="${s.id}">
-                <span class="chip__emoji">${s.emoji}</span>
-                <span class="chip__label">${s.label}</span>
-              </button>`).join("")}
-          </div>
-        </div>
-
-        <button class="btn btn--primary btn--big" id="generate-btn">
-          Create it! ✨
-        </button>
-      </div>
-    `;
-
-    container.querySelector("#style-shape")?.addEventListener("click", () => {
-      styleMode = "shape"; if (!artStyle) artStyle = "cartoon"; draw();
-    });
-    container.querySelector("#style-copy")?.addEventListener("click", () => {
-      styleMode = "copy"; artStyle = ""; draw();
-    });
-    container.querySelectorAll<HTMLButtonElement>("[data-style]").forEach((chip) => {
-      chip.addEventListener("click", () => { artStyle = chip.dataset.style!; draw(); });
-    });
-    container.querySelector("#generate-btn")?.addEventListener("click", () => {
-      phase = "loading"; draw();
-    });
   }
 
   function renderLoading() {
@@ -183,7 +114,7 @@ export function renderGenerateSprites(
           </div>
         `;
         container.querySelector("#retry-btn")?.addEventListener("click", () => {
-          phase = "pick-style"; draw();
+          goToStep("describe-character");
         });
       });
   }
@@ -240,7 +171,7 @@ export function renderGenerateSprites(
     });
 
     container.querySelector("#retry-btn")?.addEventListener("click", () => {
-      phase = "pick-style"; draw();
+      goToStep("describe-character");
     });
   }
 

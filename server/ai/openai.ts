@@ -11,6 +11,9 @@ const POSE_PROMPTS: Record<Exclude<keyof SpriteBuffers, "collectible">, string> 
 // Order the 3 poses appear left-to-right in the generated sprite sheet.
 const SHEET_POSE_ORDER: Array<Exclude<keyof SpriteBuffers, "collectible">> = ["idle", "move", "celebrate"];
 const PANEL_SIZE = 512;
+// Crop a few px inside each panel's nominal boundary — defensive against any stray
+// edge/border pixels landing right at the boundary line.
+const CROP_INSET = 6;
 
 const provider: ServerAiProvider = {
   async generateSprites(description: string, drawingBase64: string, styleMode?: "shape" | "copy", artStyle?: string): Promise<SpriteBuffers> {
@@ -49,23 +52,29 @@ const provider: ServerAiProvider = {
     // and proportions — then crop the sheet into 3 separate sprite files. The collectible
     // has no pose-consistency requirement, so it stays a separate call, run in parallel.
     const sheetPrompt =
-      `2D video game character sprite sheet, exactly 3 square panels arranged left-to-right ` +
-      `in the TOP HALF of the image only (a 3-panel comic-strip layout), each panel ${PANEL_SIZE}x${PANEL_SIZE}, ` +
-      `with the bottom half of the image left blank/transparent. ` +
-      `CHARACTER (keep IDENTICAL across all 3 panels — same shape, colors, face, and design): ${characterSheet}. ` +
+      `2D video game character sprite sheet. Split the TOP HALF of the image into exactly 3 ` +
+      `equal invisible square regions, side by side, each ${PANEL_SIZE}x${PANEL_SIZE}. The bottom ` +
+      `half of the image is blank/transparent. ` +
+      `IMPORTANT — do NOT draw any dividing lines, borders, frames, panel outlines, or gutters ` +
+      `anywhere in the image — the 3-region split is an invisible layout guide only, the final ` +
+      `image must look like plain artwork with nothing separating the regions. ` +
+      `In each of the 3 regions, draw the character FULL BODY from head to feet, entirely inside ` +
+      `that region with a clear margin of empty space on every side — the head, hands, and feet ` +
+      `must NOT touch or cross the edge of the region. Nothing may be cropped or cut off. ` +
+      `CHARACTER (keep IDENTICAL across all 3 regions — same shape, colors, face, and design): ${characterSheet}. ` +
       `STYLE: ${styleInstruction} ` +
-      `PANEL 1 (leftmost): ${POSE_PROMPTS.idle}. ` +
-      `PANEL 2 (middle): ${POSE_PROMPTS.move}. ` +
-      `PANEL 3 (rightmost): ${POSE_PROMPTS.celebrate}. ` +
-      `Transparent background, no text, no watermark, no panel numbers/labels, PNG.`;
+      `LEFT region: ${POSE_PROMPTS.idle}. ` +
+      `MIDDLE region: ${POSE_PROMPTS.move}. ` +
+      `RIGHT region: ${POSE_PROMPTS.celebrate}. ` +
+      `Transparent background, no text, no watermark, no numbers or labels, PNG.`;
 
-    const [poseEntries, collectibleFile] = await Promise.all([
+    const [sheetResult, collectibleFile] = await Promise.all([
       (async () => {
         const response = await client.images.generate({
           model: "gpt-image-1",
           prompt: sheetPrompt,
           size: "1536x1024",
-          quality: "medium",
+          quality: "high",
           background: "transparent",
           n: 1,
         });
@@ -73,13 +82,23 @@ const provider: ServerAiProvider = {
         if (!b64) throw new Error("No image data returned for sprite sheet");
         const sheetBuffer = Buffer.from(b64, "base64");
 
-        return Promise.all(SHEET_POSE_ORDER.map(async (pose, i) => {
+        const poseEntries = await Promise.all(SHEET_POSE_ORDER.map(async (pose, i) => {
           const cropped = await sharp(sheetBuffer)
-            .extract({ left: i * PANEL_SIZE, top: 0, width: PANEL_SIZE, height: PANEL_SIZE })
+            .extract({
+              left: i * PANEL_SIZE + CROP_INSET,
+              top: CROP_INSET,
+              width: PANEL_SIZE - CROP_INSET * 2,
+              height: PANEL_SIZE - CROP_INSET * 2,
+            })
             .png()
             .toBuffer();
           return [pose, { data: cropped, ext: "png" }] as const;
         }));
+
+        // Keep the raw, uncropped sheet alongside the cropped poses (saved as sheet.png by the
+        // generic save loop in routes/ai.ts) so generation problems — bad crops, panel bleed,
+        // stray borders — can be diagnosed by comparing it against the final cropped sprites.
+        return { poseEntries, sheet: { data: sheetBuffer, ext: "png" as const } };
       })(),
 
       (async (): Promise<SpriteFile> => {
@@ -102,8 +121,9 @@ const provider: ServerAiProvider = {
     ]);
 
     return {
-      ...Object.fromEntries(poseEntries),
+      ...Object.fromEntries(sheetResult.poseEntries),
       collectible: collectibleFile,
+      sheet: sheetResult.sheet,
     } as unknown as SpriteBuffers;
   },
 

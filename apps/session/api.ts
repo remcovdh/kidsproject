@@ -216,17 +216,18 @@ export async function fetchGallery(sessionId: string): Promise<GalleryItem[]> {
 export async function generateBackground(
   description: string,
   aiProvider: string,
-  imageBase64?: string,
-  styleDescription?: string,
+  imageBase64: string,
+  styleMode: "shape" | "copy",
+  artStyle?: string,
 ): Promise<{ backgroundUrl: string }> {
   if (MOCK_MODE) {
     await sleep(1500);
-    return { backgroundUrl: "" };
+    return { backgroundUrl: svgUrl("your world", "#4ECDC4") };
   }
   return apiFetch<{ backgroundUrl: string }>(`${API}/api/ai/background`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ description, aiProvider, imageBase64, styleDescription }),
+    body: JSON.stringify({ description, aiProvider, imageBase64, styleMode, artStyle }),
   });
 }
 

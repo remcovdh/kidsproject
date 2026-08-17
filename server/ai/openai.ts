@@ -141,46 +141,44 @@ const provider: ServerAiProvider = {
     } as unknown as SpriteBuffers;
   },
 
-  async generateBackground(description: string, imageBase64?: string, styleDescription?: string): Promise<SpriteFile> {
+  async generateBackground(description: string, imageBase64: string, styleMode: "shape" | "copy", artStyle?: string): Promise<SpriteFile> {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    let sceneDescription = description;
+    // Vision analysis of the teacher-captured world photo — focus varies by mode, mirroring
+    // generateSprites' shape-vs-copy pattern.
+    const visionPrompt = styleMode === "copy"
+      ? `A child drew this and photographed it to use as their video game's background/world. Write a short SCENE SHEET: describe the exact colors, shapes, and layout so an illustrator could recreate it identically — including the rough childlike style and coloring.${description ? ` The child also described it as: "${description}".` : ""}`
+      : `A child drew this and photographed it to use as their video game's background/world. Describe the SCENE and LAYOUT only: setting, key shapes/elements, composition (e.g. sky/ground split). Do NOT mention colors or art style — focus on what's depicted so an illustrator could recreate the scene.${description ? ` The child also described it as: "${description}".` : ""}`;
 
-    if (imageBase64) {
-      try {
-        const analysis = await client.chat.completions.create({
-          model: "gpt-4o",
-          max_tokens: 120,
-          messages: [{
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `A child drew this and wants to use it as inspiration for a video game background. Describe the scene in 1-2 sentences for an illustrator — focus on setting, mood, and colors.${description ? ` The child also described it as: "${description}".` : ""}`,
-              },
-              {
-                type: "image_url",
-                image_url: { url: `data:image/jpeg;base64,${imageBase64}`, detail: "low" },
-              },
-            ],
-          }],
-        });
-        sceneDescription = analysis.choices[0]?.message?.content ?? description;
-      } catch (err) {
-        console.warn("GPT-4o Vision analysis for background failed:", err);
-      }
+    let sceneDescription = description || "a colorful game world";
+    try {
+      const analysis = await client.chat.completions.create({
+        model: "gpt-4o",
+        max_tokens: 150,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "text", text: visionPrompt },
+            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}`, detail: "low" } },
+          ],
+        }],
+      });
+      sceneDescription = analysis.choices[0]?.message?.content ?? sceneDescription;
+    } catch (err) {
+      console.warn("GPT-4o Vision analysis for background failed:", err);
     }
 
-    const styleClause = styleDescription
-      ? ` Art style should match this character: ${styleDescription}.`
-      : "";
+    const styleInstruction = styleMode === "copy"
+      ? "Preserve the EXACT childlike art style, rough hand-drawn quality, and original colors from the drawing. Do not clean up or professionalize the look — keep it looking like the child's own style."
+      : `Render as a clean ${artStyle ?? "cartoon"} game background. Use the scene's layout and distinctive features from the drawing, but apply a fresh ${artStyle ?? "cartoon"} art style with bold outlines and bright colors. Do NOT copy the drawing's coloring or rough style.`;
 
     const response = await client.images.generate({
       model: "gpt-image-1",
       prompt:
-        `A tall portrait-orientation background for a children's video game (taller than wide, like a phone screen). Scene: ${sceneDescription}.${styleClause} ` +
-        `Sky fills the top half, ground or scenery at the bottom. Colorful, cheerful, childlike art style. ` +
-        `No characters, no text, just the scenery. Flat 2D illustration style, vibrant colors, bold shapes.`,
+        `A tall portrait-orientation background for a children's video game (taller than wide, like a phone screen). ` +
+        `SCENE (based on a child's own drawing/photo): ${sceneDescription}. ` +
+        `STYLE: ${styleInstruction} ` +
+        `Sky fills the top, ground or scenery at the bottom. No characters, no text, just the scenery.`,
       size: "1024x1536",
       quality: "medium",
       n: 1,

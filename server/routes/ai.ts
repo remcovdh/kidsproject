@@ -99,18 +99,22 @@ aiRouter.post("/sprites", async (req, res) => {
   }
 });
 
-// POST /api/ai/background — generate a background image from a text description
-// Body: { description, imageBase64?, styleDescription? }
+// POST /api/ai/background — generate a background image from a teacher-captured world photo,
+// refined by an optional description and an art-style choice (mirrors /api/ai/sprites' shape/copy pattern)
+// Body: { description?, imageBase64, styleMode, artStyle? }
 // Returns: { backgroundUrl }
 aiRouter.post("/background", async (req, res) => {
-  const { description, imageBase64, styleDescription } = req.body as {
-    description?: string; imageBase64?: string; styleDescription?: string;
+  const { description, imageBase64, styleMode, artStyle } = req.body as {
+    description?: string; imageBase64?: string; styleMode?: "shape" | "copy"; artStyle?: string;
   };
-  if (!description?.trim() && !imageBase64) {
-    return res.status(400).json({ error: "description or imageBase64 is required" });
+  if (!imageBase64) {
+    return res.status(400).json({ error: "imageBase64 is required" });
   }
   if (description && description.length > 300) {
     return res.status(400).json({ error: "Description is too long (max 300 characters)" });
+  }
+  if (artStyle && artStyle.length > 50) {
+    return res.status(400).json({ error: "Art style is too long (max 50 characters)" });
   }
   if (description && isFlagged(description)) {
     return res.status(400).json({ error: "Description contains inappropriate content" });
@@ -128,7 +132,7 @@ aiRouter.post("/background", async (req, res) => {
     if (!provider.generateBackground) {
       return res.status(501).json({ error: `Provider "${providerName}" does not support background generation.` });
     }
-    const { data, ext } = await provider.generateBackground(description ?? "", imageBase64, styleDescription);
+    const { data, ext } = await provider.generateBackground(description ?? "", imageBase64, styleMode ?? "shape", artStyle);
     const filename = `bg_${uuid()}.${ext}`;
     writeFileSync(join(UPLOAD_DIR, filename), data);
     res.json({ backgroundUrl: `/uploads/${filename}` });

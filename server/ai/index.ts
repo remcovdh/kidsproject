@@ -14,7 +14,9 @@ export interface SpriteBuffers {
 
 export interface ServerAiProvider {
   generateSprites(description: string, drawingBase64: string, styleMode?: "shape" | "copy", artStyle?: string): Promise<SpriteBuffers>;
-  generateBackground?(description: string, imageBase64?: string, styleDescription?: string): Promise<SpriteFile>;
+  // imageBase64 is required — the world/background flow always starts from a teacher-captured
+  // photo now, with description+style refining it, mirroring generateSprites' shape/copy pattern.
+  generateBackground?(description: string, imageBase64: string, styleMode: "shape" | "copy", artStyle?: string): Promise<SpriteFile>;
 }
 
 export async function getServerProvider(providerName: string): Promise<ServerAiProvider> {

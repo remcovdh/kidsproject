@@ -265,14 +265,14 @@ const provider: ServerAiProvider = {
     return { ...Object.fromEntries(poseEntries), collectible: collectibleSprite } as unknown as SpriteBuffers;
   },
 
-  async generateBackground(description: string, imageBase64?: string, styleDescription?: string): Promise<SpriteFile> {
+  async generateBackground(description: string, imageBase64: string, styleMode: "shape" | "copy", artStyle?: string): Promise<SpriteFile> {
     const baseURL    = process.env.LOCAL_BASE_URL   ?? "http://localhost:11434/v1";
     const apiKey     = process.env.LOCAL_API_KEY    ?? "ollama";
     const chatModel  = process.env.LOCAL_CHAT_MODEL ?? "gemma4:12b";
     const imageModel = process.env.LOCAL_IMAGE_MODEL ?? "";
     const useSD      = !!process.env.LOCAL_SD_URL;
 
-    let sceneDescription = description;
+    let sceneDescription = description || "a colorful game world";
 
     if (imageBase64) {
       try {
@@ -283,19 +283,21 @@ const provider: ServerAiProvider = {
           messages: [{
             role: "user",
             content: [
-              { type: "text", text: `A child drew this and wants to use it as inspiration for a video game background. Describe the scene in 1-2 sentences — setting, mood, colors.${description ? ` The child described it as: "${description}".` : ""}` },
+              { type: "text", text: `A child drew this and photographed it to use as their video game's background/world. Describe the scene in 1-2 sentences — setting, layout, colors.${description ? ` The child also described it as: "${description}".` : ""}` },
               { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
             ],
           }],
         });
-        sceneDescription = res.choices[0]?.message?.content ?? description;
+        sceneDescription = res.choices[0]?.message?.content ?? sceneDescription;
         console.log(`[local] Background vision analysis: ${sceneDescription.slice(0, 80)}…`);
       } catch (err) {
         console.warn("[local] Vision analysis for background failed:", (err as Error).message);
       }
     }
 
-    const styleClause = styleDescription ? `, art style matching: ${styleDescription}` : "";
+    const styleClause = styleMode === "copy"
+      ? ", preserve the exact childlike art style and original colors from the drawing"
+      : `, art style: ${artStyle ?? "cartoon"}`;
 
     if (useSD) {
       const sdUrl = process.env.LOCAL_SD_URL!.replace(/\/$/, "");

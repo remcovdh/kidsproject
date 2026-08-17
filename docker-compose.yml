@@ -33,6 +33,18 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ── Admin app (facilitator: roster + photo capture, Vite build → nginx) ──────
+  admin:
+    build:
+      context: .
+      dockerfile: docker/admin.Dockerfile
+    ports:
+      - "${ADMIN_PORT:-3001}:80"
+    depends_on:
+      server:
+        condition: service_healthy
+    restart: unless-stopped
+
   # ── Optional: Ollama for local AI (no OpenAI key needed) ─────────────────────
   # Enable with:  docker compose --profile local-ai up --build -d
   #

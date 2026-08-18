@@ -58,6 +58,23 @@ export interface SpriteVersion {
   createdAt: string;
 }
 
+// A generation offers two candidates — "text" (generated purely from a written description)
+// and "image" (image-to-image, edited directly from the child's own photo) — for the child to
+// pick between. Neither is "the" version until chooseSprites()/chooseBackground() is called.
+export interface SpriteGenOption { prompt: string; sprites: SpritePack; }
+export interface SpriteGenChoice {
+  versionId: string;
+  label: string;
+  createdAt: string;
+  options: { text: SpriteGenOption; image: SpriteGenOption };
+}
+
+export interface BackgroundGenOption { prompt: string; backgroundUrl: string; }
+export interface BackgroundGenChoice {
+  versionId: string;
+  options: { text: BackgroundGenOption; image: BackgroundGenOption };
+}
+
 export interface GalleryItem {
   childId: string;
   childName: string;
@@ -138,35 +155,60 @@ export async function checkModeration(text: string): Promise<{ allowed: boolean 
   });
 }
 
+// Mock-mode only: holds the two candidates from generateSprites() until chooseSprites() is
+// called, so mock mode can round-trip a choice the same way the real server does.
+const _pendingSpriteChoices = new Map<string, { label: string; createdAt: string; text: SpriteGenOption; image: SpriteGenOption }>();
+
 export async function generateSprites(
   childId: string,
   description: string,
   styleMode: "shape" | "copy" = "shape",
   artStyle = "cartoon",
-): Promise<SpriteVersion> {
+): Promise<SpriteGenChoice> {
   if (MOCK_MODE) {
     await sleep(2800);
     _versionCount++;
-    const label  = VERSION_LABELS[_versionCount - 1] ?? `Try ${_versionCount}`;
-    const colors = ["#FF6B35", "#4ECDC4", "#A855F7", "#F59E0B"];
-    const bg     = colors[(_versionCount - 1) % colors.length];
-    return {
-      id: `v${_versionCount}_${Date.now()}`,
-      label,
-      prompt: `Character: ${description}. Style: ${styleMode === "copy" ? "copy drawing style" : artStyle}.`,
+    const label      = VERSION_LABELS[_versionCount - 1] ?? `Try ${_versionCount}`;
+    const versionId  = `v${_versionCount}_${Date.now()}`;
+    const createdAt  = new Date().toISOString();
+    const promptBase = `Character: ${description}. Style: ${styleMode === "copy" ? "copy drawing style" : artStyle}.`;
+    const text: SpriteGenOption = {
+      prompt: `${promptBase} (generated from a written description only)`,
       sprites: {
-        idle:        svgUrl("idle",  bg),
-        move:        svgUrl("move",  "#4ECDC4"),
-        celebrate:   svgUrl("yay!", "#A8E6CF"),
-        collectible: svgUrl("★",    "#FFE66D"),
+        idle: svgUrl("idle", "#FF6B35"), move: svgUrl("move", "#4ECDC4"),
+        celebrate: svgUrl("yay!", "#A8E6CF"), collectible: svgUrl("★", "#FFE66D"),
       },
-      createdAt: new Date().toISOString(),
     };
+    const image: SpriteGenOption = {
+      prompt: `${promptBase} (image-to-image, edited directly from the photo)`,
+      sprites: {
+        idle: svgUrl("idle", "#A855F7"), move: svgUrl("move", "#F59E0B"),
+        celebrate: svgUrl("yay!", "#A8E6CF"), collectible: svgUrl("★", "#FFE66D"),
+      },
+    };
+    _pendingSpriteChoices.set(versionId, { label, createdAt, text, image });
+    return { versionId, label, createdAt, options: { text, image } };
   }
-  return apiFetch<SpriteVersion>(`${API}/api/ai/sprites`, {
+  return apiFetch<SpriteGenChoice>(`${API}/api/ai/sprites`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ childId, description, styleMode, artStyle }),
+  });
+}
+
+export async function chooseSprites(
+  childId: string, versionId: string, chosen: "text" | "image"
+): Promise<SpriteVersion> {
+  if (MOCK_MODE) {
+    await sleep(150);
+    const pending = _pendingSpriteChoices.get(versionId);
+    const option  = pending?.[chosen] ?? { prompt: "", sprites: { idle: "", move: "", celebrate: "", collectible: "" } };
+    return { id: versionId, label: pending?.label ?? "Try", prompt: option.prompt, sprites: option.sprites, createdAt: pending?.createdAt ?? new Date().toISOString() };
+  }
+  return apiFetch<SpriteVersion>(`${API}/api/ai/sprites/${versionId}/choose`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ childId, chosen }),
   });
 }
 
@@ -220,23 +262,43 @@ export async function fetchGallery(sessionId: string): Promise<GalleryItem[]> {
   return apiFetch<GalleryItem[]>(`${API}/api/sessions/${sessionId}/gallery`);
 }
 
+// Mock-mode only: same round-trip pattern as _pendingSpriteChoices above.
+const _pendingBackgroundChoices = new Map<string, { text: BackgroundGenOption; image: BackgroundGenOption }>();
+
 export async function generateBackground(
   childId: string,
   description: string,
   styleMode: "shape" | "copy",
   artStyle?: string,
-): Promise<{ backgroundUrl: string; prompt: string }> {
+): Promise<BackgroundGenChoice> {
   if (MOCK_MODE) {
     await sleep(1500);
-    return {
-      backgroundUrl: svgUrl("your world", "#4ECDC4"),
-      prompt: `(mock) World: ${description || "a colorful game world"}. Style: ${styleMode === "copy" ? "as drawn" : artStyle}.`,
-    };
+    const versionId  = `bg_${Date.now()}`;
+    const promptBase = `World: ${description || "a colorful game world"}. Style: ${styleMode === "copy" ? "as drawn" : artStyle}.`;
+    const text: BackgroundGenOption  = { backgroundUrl: svgUrl("your world", "#4ECDC4"), prompt: `${promptBase} (generated from a written description only)` };
+    const image: BackgroundGenOption = { backgroundUrl: svgUrl("your world", "#A855F7"), prompt: `${promptBase} (image-to-image, edited directly from the photo)` };
+    _pendingBackgroundChoices.set(versionId, { text, image });
+    return { versionId, options: { text, image } };
   }
-  return apiFetch<{ backgroundUrl: string; prompt: string }>(`${API}/api/ai/background`, {
+  return apiFetch<BackgroundGenChoice>(`${API}/api/ai/background`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ childId, description, styleMode, artStyle }),
+  });
+}
+
+export async function chooseBackground(
+  childId: string, versionId: string, chosen: "text" | "image"
+): Promise<{ backgroundUrl: string; prompt: string }> {
+  if (MOCK_MODE) {
+    await sleep(150);
+    const pending = _pendingBackgroundChoices.get(versionId);
+    return pending?.[chosen] ?? { backgroundUrl: "", prompt: "" };
+  }
+  return apiFetch<{ backgroundUrl: string; prompt: string }>(`${API}/api/ai/background/${versionId}/choose`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ childId, chosen }),
   });
 }
 

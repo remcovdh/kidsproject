@@ -20,7 +20,11 @@
  */
 
 import OpenAI from "openai";
-import type { ServerAiProvider, SpriteBuffers, SpriteFile, SpriteGenerationResult, BackgroundGenerationResult } from "./index.js";
+import type {
+  ServerAiProvider, SpriteBuffers, SpriteFile,
+  SpriteGenerationResult, SpriteGenerationChoice,
+  BackgroundGenerationResult, BackgroundGenerationChoice,
+} from "./index.js";
 
 // ── SVG sprite generator ──────────────────────────────────────────────────────
 // Produces a simple but distinct cartoon character for each pose.
@@ -170,7 +174,7 @@ const VISION_POSE_PROMPTS: Record<Exclude<keyof SpriteBuffers, "collectible" | "
 };
 
 const provider: ServerAiProvider = {
-  async generateSprites(description: string, drawingBase64: string, styleMode?: "shape" | "copy", artStyle?: string): Promise<SpriteGenerationResult> {
+  async generateSprites(description: string, drawingBase64: string, styleMode?: "shape" | "copy", artStyle?: string): Promise<SpriteGenerationChoice> {
     const baseURL    = process.env.LOCAL_BASE_URL   ?? "http://localhost:11434/v1";
     const apiKey     = process.env.LOCAL_API_KEY    ?? "ollama";
     const chatModel  = process.env.LOCAL_CHAT_MODEL ?? "gemma4:12b";
@@ -268,13 +272,18 @@ const provider: ServerAiProvider = {
       : `apply ${artStyle ?? "cartoon"} art style`;
     const prompt = `Character: ${characterDesc}. Style: ${styleSummary}. Poses: idle, move, celebrate. (via ${backend})`;
 
-    return {
+    // The local/offline provider doesn't yet implement true image-to-image (SD's img2img
+    // endpoint and a Together.ai-style edit call are both real options, just not built here
+    // yet) — both candidates are the same result for now, honestly labeled as such, rather
+    // than silently only offering one option.
+    const result: SpriteGenerationResult = {
       sprites: { ...Object.fromEntries(poseEntries), collectible: collectibleSprite } as unknown as SpriteBuffers,
       prompt,
     };
+    return { text: result, image: { ...result, prompt: `${prompt} (image-to-image not yet implemented for the local provider — same result shown)` } };
   },
 
-  async generateBackground(description: string, imageBase64: string, styleMode: "shape" | "copy", artStyle?: string): Promise<BackgroundGenerationResult> {
+  async generateBackground(description: string, imageBase64: string, styleMode: "shape" | "copy", artStyle?: string): Promise<BackgroundGenerationChoice> {
     const baseURL    = process.env.LOCAL_BASE_URL   ?? "http://localhost:11434/v1";
     const apiKey     = process.env.LOCAL_API_KEY    ?? "ollama";
     const chatModel  = process.env.LOCAL_CHAT_MODEL ?? "gemma4:12b";
@@ -311,6 +320,8 @@ const provider: ServerAiProvider = {
     // description alone to carry it through (it may not, if the photo doesn't obviously show it).
     const themeClause = description ? `, world theme: ${description}` : "";
 
+    let result: BackgroundGenerationResult | null = null;
+
     if (useSD) {
       const sdUrl = process.env.LOCAL_SD_URL!.replace(/\/$/, "");
       const prompt = `portrait background for a children's video game, tall format, ${sceneDescription}${themeClause}${styleClause}, simple 2d cartoon, colorful, no characters, no text`;
@@ -324,21 +335,27 @@ const provider: ServerAiProvider = {
         }),
       });
       const json = await res.json() as { images?: string[] };
-      if (json.images?.[0]) return { file: { data: Buffer.from(json.images[0], "base64"), ext: "png" }, prompt };
+      if (json.images?.[0]) result = { file: { data: Buffer.from(json.images[0], "base64"), ext: "png" }, prompt };
     } else if (imageModel) {
       const client = new OpenAI({ baseURL, apiKey });
       const prompt = `Tall portrait-orientation background for a children's video game (taller than wide). Scene: ${sceneDescription}${themeClause}${styleClause}. Sky at top, scenery at bottom. Colorful, childlike art, no characters, no text.`;
       const resp = await client.images.generate({ model: imageModel, prompt, size: "1024x1024", n: 1 });
       const url = resp.data?.[0]?.url;
       if (url) {
-        return { file: { data: Buffer.from(await fetch(url).then(async r => new Uint8Array(await r.arrayBuffer()))), ext: "png" }, prompt };
+        result = { file: { data: Buffer.from(await fetch(url).then(async r => new Uint8Array(await r.arrayBuffer()))), ext: "png" }, prompt };
       }
     }
 
-    return {
-      file: svgBackground(sceneDescription),
-      prompt: `Scene: ${sceneDescription}${themeClause}${styleClause} (no image model configured — used a colored placeholder background)`,
-    };
+    if (!result) {
+      result = {
+        file: svgBackground(sceneDescription),
+        prompt: `Scene: ${sceneDescription}${themeClause}${styleClause} (no image model configured — used a colored placeholder background)`,
+      };
+    }
+
+    // Same caveat as generateSprites above: no real image-to-image backend wired up for the
+    // local provider yet, so both candidates are honestly the same result for now.
+    return { text: result, image: { ...result, prompt: `${result.prompt} (image-to-image not yet implemented for the local provider — same result shown)` } };
   },
 };
 

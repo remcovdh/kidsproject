@@ -1,10 +1,11 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { v4 as uuid } from "uuid";
-import { mkdirSync, writeFileSync, readFileSync } from "fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from "fs";
 import { join } from "path";
 import db, { UPLOAD_DIR } from "../db.js";
-import { getServerProvider } from "../ai/index.js";
+import { getServerProvider, type SpriteGenerationResult, type BackgroundGenerationResult } from "../ai/index.js";
 import { isFlagged } from "./moderation.js";
+import { checkFacilitatorAuth } from "../auth.js";
 
 const VERSION_LABELS = ["First try", "Second try", "Third try", "Fourth try"];
 
@@ -48,12 +49,31 @@ function aiRateLimit(req: Request, res: Response, next: NextFunction) {
 
 aiRouter.use(aiRateLimit);
 
-// POST /api/ai/sprites — generate a sprite pack for a child's drawing
-// Body: { childId, description }
+function recordChoice(kind: "character" | "world", chosen: "text" | "image", childId: string) {
+  db.prepare(
+    "INSERT INTO generation_choices (id, kind, chosen, child_id) VALUES (?, ?, ?, ?)"
+  ).run(uuid(), kind, chosen, childId);
+}
+
+// ── Character sprites ───────────────────────────────────────────────────────────
+
+interface SpriteMeta {
+  childId: string;
+  label: string;
+  createdAt: string;
+  text:  { prompt: string; sprites: Record<string, string> };
+  image: { prompt: string; sprites: Record<string, string> };
+}
+
+// POST /api/ai/sprites — generate TWO candidate sprite packs for a child's drawing (one
+// text-only, one image-to-image) and return both for the child to choose between. Neither
+// is written to sprite_versions yet — that happens in /sprites/:versionId/choose once the
+// child picks one.
+// Body: { childId, description, styleMode?, artStyle? }
 // The drawing photo itself is NOT taken from the request body — it's looked up server-side
 // from the child's latest teacher-approved photo_captures record, so this can't be triggered
 // with an arbitrary/unapproved photo by calling the endpoint directly.
-// Returns: { id, label, prompt, sprites, createdAt }
+// Returns: { versionId, label, createdAt, options: { text: {prompt, sprites}, image: {prompt, sprites} } }
 aiRouter.post("/sprites", async (req, res) => {
   const { childId, description, styleMode, artStyle } = req.body as {
     childId?: string; description?: string;
@@ -95,41 +115,84 @@ aiRouter.post("/sprites", async (req, res) => {
 
   try {
     const provider = await getServerProvider(row.ai_provider);
-    const { sprites: buffers, prompt } = await provider.generateSprites(description, drawingBase64, styleMode, artStyle);
+    const { text, image } = await provider.generateSprites(description, drawingBase64, styleMode, artStyle);
 
     const versionId = uuid();
-    const spriteDir = join(UPLOAD_DIR, "sprites", versionId);
-    mkdirSync(spriteDir, { recursive: true });
+    const versionDir = join(UPLOAD_DIR, "sprites", versionId);
 
-    const sprites: Record<string, string> = {};
-    for (const [pose, { data, ext }] of Object.entries(buffers)) {
-      const filename = `${pose}.${ext}`;
-      writeFileSync(join(spriteDir, filename), data);
-      sprites[pose] = `/uploads/sprites/${versionId}/${filename}`;
+    function saveOption(name: "text" | "image", result: SpriteGenerationResult) {
+      const dir = join(versionDir, name);
+      mkdirSync(dir, { recursive: true });
+      const sprites: Record<string, string> = {};
+      for (const [pose, { data, ext }] of Object.entries(result.sprites)) {
+        const filename = `${pose}.${ext}`;
+        writeFileSync(join(dir, filename), data);
+        sprites[pose] = `/uploads/sprites/${versionId}/${name}/${filename}`;
+      }
+      return { prompt: result.prompt, sprites };
     }
+
+    const textOption  = saveOption("text", text);
+    const imageOption = saveOption("image", image);
 
     const { n } = db.prepare(
       "SELECT COUNT(*) as n FROM sprite_versions WHERE child_id = ?"
     ).get(childId) as { n: number };
     const label = VERSION_LABELS[n] ?? `Try ${n + 1}`;
+    const createdAt = new Date().toISOString();
 
-    db.prepare(
-      "INSERT INTO sprite_versions (id, child_id, label, prompt, sprites) VALUES (?, ?, ?, ?, ?)"
-    ).run(versionId, childId, label, prompt, JSON.stringify(sprites));
+    const meta: SpriteMeta = { childId, label, createdAt, text: textOption, image: imageOption };
+    writeFileSync(join(versionDir, "meta.json"), JSON.stringify(meta));
 
-    res.json({ id: versionId, label, prompt, sprites, createdAt: new Date().toISOString() });
+    res.json({ versionId, label, createdAt, options: { text: textOption, image: imageOption } });
   } catch (err) {
     console.error("Sprite generation error:", err);
     res.status(500).json({ error: "Character generation failed — please try again." });
   }
 });
 
-// POST /api/ai/background — generate a background image from a teacher-captured world photo,
-// refined by an optional description and an art-style choice (mirrors /api/ai/sprites' shape/copy
-// pattern). The photo is looked up server-side from the child's latest approved photo_captures
-// record, same as /api/ai/sprites — never trusted from the request body.
+// POST /api/ai/sprites/:versionId/choose — the child picks "text" or "image"; that option
+// becomes the real sprite_versions row (and the only one that survives into publish/preview/
+// history). The chosen option's prompt+sprites are read back from the meta.json written
+// during /sprites, not trusted from the request body.
+// Body: { childId, chosen: "text" | "image" }
+// Returns: { id, label, prompt, sprites, createdAt } — a normal SpriteVersion shape
+aiRouter.post("/sprites/:versionId/choose", (req, res) => {
+  const { versionId } = req.params;
+  const { childId, chosen } = req.body as { childId?: string; chosen?: "text" | "image" };
+  if (!childId || (chosen !== "text" && chosen !== "image")) {
+    return res.status(400).json({ error: "childId and a valid chosen ('text'|'image') are required" });
+  }
+
+  const metaPath = join(UPLOAD_DIR, "sprites", versionId, "meta.json");
+  if (!existsSync(metaPath)) return res.status(404).json({ error: "That generation wasn't found — try again." });
+
+  const meta = JSON.parse(readFileSync(metaPath, "utf-8")) as SpriteMeta;
+  if (meta.childId !== childId) return res.status(403).json({ error: "That generation belongs to a different child." });
+
+  const option = meta[chosen];
+  db.prepare(
+    "INSERT INTO sprite_versions (id, child_id, label, prompt, sprites) VALUES (?, ?, ?, ?, ?)"
+  ).run(versionId, childId, meta.label, option.prompt, JSON.stringify(option.sprites));
+  recordChoice("character", chosen, childId);
+
+  res.json({ id: versionId, label: meta.label, prompt: option.prompt, sprites: option.sprites, createdAt: meta.createdAt });
+});
+
+// ── World / background ──────────────────────────────────────────────────────────
+
+interface BackgroundMeta {
+  childId: string;
+  createdAt: string;
+  text:  { prompt: string; backgroundUrl: string };
+  image: { prompt: string; backgroundUrl: string };
+}
+
+// POST /api/ai/background — generate TWO candidate background images from a teacher-captured
+// world photo (one text-only, one image-to-image), refined by an optional description and an
+// art-style choice. Neither is "final" until /background/:versionId/choose is called.
 // Body: { childId, description?, styleMode, artStyle? }
-// Returns: { backgroundUrl }
+// Returns: { versionId, options: { text: {prompt, backgroundUrl}, image: {prompt, backgroundUrl} } }
 aiRouter.post("/background", async (req, res) => {
   const { childId, description, styleMode, artStyle } = req.body as {
     childId?: string; description?: string; styleMode?: "shape" | "copy"; artStyle?: string;
@@ -172,12 +235,61 @@ aiRouter.post("/background", async (req, res) => {
     if (!provider.generateBackground) {
       return res.status(501).json({ error: `Provider "${row.ai_provider}" does not support background generation.` });
     }
-    const { file, prompt } = await provider.generateBackground(description ?? "", imageBase64, styleMode ?? "shape", artStyle);
-    const filename = `bg_${uuid()}.${file.ext}`;
-    writeFileSync(join(UPLOAD_DIR, filename), file.data);
-    res.json({ backgroundUrl: `/uploads/${filename}`, prompt });
+    const { text, image } = await provider.generateBackground(description ?? "", imageBase64, styleMode ?? "shape", artStyle);
+
+    const versionId = uuid();
+    const dir = join(UPLOAD_DIR, "backgrounds", versionId);
+    mkdirSync(dir, { recursive: true });
+
+    function saveOption(name: "text" | "image", result: BackgroundGenerationResult) {
+      const filename = `${name}.${result.file.ext}`;
+      writeFileSync(join(dir, filename), result.file.data);
+      return { prompt: result.prompt, backgroundUrl: `/uploads/backgrounds/${versionId}/${filename}` };
+    }
+
+    const textOption  = saveOption("text", text);
+    const imageOption = saveOption("image", image);
+    const createdAt = new Date().toISOString();
+
+    const meta: BackgroundMeta = { childId, createdAt, text: textOption, image: imageOption };
+    writeFileSync(join(dir, "meta.json"), JSON.stringify(meta));
+
+    res.json({ versionId, options: { text: textOption, image: imageOption } });
   } catch (err) {
     console.error("Background generation error:", err);
     res.status(500).json({ error: "Background generation failed — please try again." });
   }
+});
+
+// POST /api/ai/background/:versionId/choose — the child picks "text" or "image"; records the
+// choice and returns that option's URL/prompt, read back from meta.json (not the request body).
+// Body: { childId, chosen: "text" | "image" }
+// Returns: { backgroundUrl, prompt }
+aiRouter.post("/background/:versionId/choose", (req, res) => {
+  const { versionId } = req.params;
+  const { childId, chosen } = req.body as { childId?: string; chosen?: "text" | "image" };
+  if (!childId || (chosen !== "text" && chosen !== "image")) {
+    return res.status(400).json({ error: "childId and a valid chosen ('text'|'image') are required" });
+  }
+
+  const metaPath = join(UPLOAD_DIR, "backgrounds", versionId, "meta.json");
+  if (!existsSync(metaPath)) return res.status(404).json({ error: "That generation wasn't found — try again." });
+
+  const meta = JSON.parse(readFileSync(metaPath, "utf-8")) as BackgroundMeta;
+  if (meta.childId !== childId) return res.status(403).json({ error: "That generation belongs to a different child." });
+
+  const option = meta[chosen];
+  recordChoice("world", chosen, childId);
+
+  res.json({ backgroundUrl: option.backgroundUrl, prompt: option.prompt });
+});
+
+// GET /api/ai/stats/generation-choices — global, cross-session tally of text-vs-image choices,
+// for facilitators deciding later whether one option should be retired.
+aiRouter.get("/stats/generation-choices", (req, res) => {
+  if (!checkFacilitatorAuth(req, res)) return;
+  const rows = db.prepare(`
+    SELECT kind, chosen, COUNT(*) as n FROM generation_choices GROUP BY kind, chosen
+  `).all() as Array<{ kind: string; chosen: string; n: number }>;
+  res.json(rows);
 });

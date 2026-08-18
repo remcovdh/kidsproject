@@ -1,6 +1,10 @@
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import sharp from "sharp";
-import type { ServerAiProvider, SpriteBuffers, SpriteFile, SpriteGenerationResult, BackgroundGenerationResult } from "./index.js";
+import type {
+  ServerAiProvider, SpriteBuffers, SpriteFile,
+  SpriteGenerationResult, SpriteGenerationChoice,
+  BackgroundGenerationResult, BackgroundGenerationChoice,
+} from "./index.js";
 
 type SheetPose = "idle" | "move" | "moveLeft" | "celebrate";
 
@@ -25,11 +29,51 @@ const PANEL_H = 768;
 // edge/border pixels landing right at the boundary line.
 const CROP_INSET = 6;
 
+const SHEET_LAYOUT_INSTRUCTIONS =
+  `a 2x2 grid of exactly 4 equal invisible regions, each ${PANEL_W}x${PANEL_H}, filling the ` +
+  `ENTIRE image (top-left, top-right, bottom-left, bottom-right). ` +
+  `IMPORTANT — do NOT draw any dividing lines, borders, frames, panel outlines, or gutters ` +
+  `anywhere in the image — the grid is an invisible layout guide only, the final image must ` +
+  `look like plain artwork with nothing separating the regions. ` +
+  `In each of the 4 regions, draw the character FULL BODY from head to feet, entirely inside ` +
+  `that region with a clear margin of empty space on every side — the head, hands, and feet ` +
+  `must NOT touch or cross the edge of the region. Nothing may be cropped or cut off. `;
+
+function poseRegions(): string {
+  return (
+    `TOP-LEFT region: ${POSE_PROMPTS.idle}. ` +
+    `TOP-RIGHT region: ${POSE_PROMPTS.move}. ` +
+    `BOTTOM-LEFT region: ${POSE_PROMPTS.moveLeft}. ` +
+    `BOTTOM-RIGHT region: ${POSE_PROMPTS.celebrate}. `
+  );
+}
+
+// Crop a generated/edited 2x2 sheet buffer into the 4 separate pose files.
+async function cropSheet(sheetBuffer: Buffer): Promise<Array<readonly [SheetPose, SpriteFile]>> {
+  return Promise.all(SHEET_LAYOUT.map(async ({ pose, col, row }) => {
+    const cropped = await sharp(sheetBuffer)
+      .extract({
+        left: col * PANEL_W + CROP_INSET,
+        top: row * PANEL_H + CROP_INSET,
+        width: PANEL_W - CROP_INSET * 2,
+        height: PANEL_H - CROP_INSET * 2,
+      })
+      .png()
+      .toBuffer();
+    return [pose, { data: cropped, ext: "png" }] as const;
+  }));
+}
+
+function buildSprites(poseEntries: Array<readonly [SheetPose, SpriteFile]>, collectible: SpriteFile, sheet: SpriteFile): SpriteBuffers {
+  return { ...Object.fromEntries(poseEntries), collectible, sheet } as unknown as SpriteBuffers;
+}
+
 const provider: ServerAiProvider = {
-  async generateSprites(description: string, drawingBase64: string, styleMode?: "shape" | "copy", artStyle?: string): Promise<SpriteGenerationResult> {
+  async generateSprites(description: string, drawingBase64: string, styleMode?: "shape" | "copy", artStyle?: string): Promise<SpriteGenerationChoice> {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    // Analyze the drawing — focus varies by mode
+    // Analyze the drawing — focus varies by mode. This feeds the TEXT-only variant, which
+    // never sees the actual photo, only this derived description.
     let characterSheet = description;
     if (drawingBase64) {
       const visionPrompt = styleMode === "copy"
@@ -57,62 +101,52 @@ const provider: ServerAiProvider = {
       ? "Preserve the EXACT childlike art style, rough hand-drawn quality, and original colors from the drawing. Do not clean up or professionalize the look — keep it looking like the child's own style."
       : `Render as a clean ${artStyle ?? "cartoon"} game sprite. Use the character's SHAPE and distinctive features from the drawing, but apply a fresh ${artStyle ?? "cartoon"} art style with bold outlines and bright colors. Do NOT copy the drawing's coloring or rough style.`;
 
-    // Generate all 4 character poses as ONE sprite-sheet image (instead of independent calls)
-    // so they stay visually consistent with each other — same colors, shape, proportions —
-    // then crop the sheet into separate sprite files. Both left- and right-running poses are
-    // generated explicitly (not mirrored client-side) since a text prompt asking for a single
-    // "facing right" running pose isn't a reliable enough constraint for gpt-image-1 to honor
-    // consistently, and a wrong-direction sprite is very noticeable in gameplay. The collectible
-    // has no pose-consistency requirement, so it stays a separate call, run in parallel.
-    const sheetPrompt =
-      `2D video game character sprite sheet, a 2x2 grid of exactly 4 equal invisible regions, ` +
-      `each ${PANEL_W}x${PANEL_H}, filling the ENTIRE image (top-left, top-right, bottom-left, ` +
-      `bottom-right). ` +
-      `IMPORTANT — do NOT draw any dividing lines, borders, frames, panel outlines, or gutters ` +
-      `anywhere in the image — the grid is an invisible layout guide only, the final image must ` +
-      `look like plain artwork with nothing separating the regions. ` +
-      `In each of the 4 regions, draw the character FULL BODY from head to feet, entirely inside ` +
-      `that region with a clear margin of empty space on every side — the head, hands, and feet ` +
-      `must NOT touch or cross the edge of the region. Nothing may be cropped or cut off. ` +
+    // Two candidate sheets, generated two different ways, run in parallel alongside the
+    // collectible (which has no pose/fidelity requirement, so it's shared by both candidates
+    // rather than generated twice):
+    //  - TEXT: pure text-to-image from the vision-derived description above. Never sees the
+    //    actual photo, so likeness depends entirely on how well that description captures it.
+    //  - IMAGE: image-to-image — the actual photo is passed to the model directly as a
+    //    reference (via images.edit), which should track the drawing's real shape/colors more
+    //    closely than a text description can, at the cost of less predictable pose compliance.
+    // The child picks whichever result they actually prefer; see routes/ai.ts's /sprites/choose.
+    const textSheetPrompt =
+      `2D video game character sprite sheet, ${SHEET_LAYOUT_INSTRUCTIONS}` +
       `CHARACTER (keep IDENTICAL across all 4 regions — same shape, colors, face, and design): ${characterSheet}. ` +
       `STYLE: ${styleInstruction} ` +
-      `TOP-LEFT region: ${POSE_PROMPTS.idle}. ` +
-      `TOP-RIGHT region: ${POSE_PROMPTS.move}. ` +
-      `BOTTOM-LEFT region: ${POSE_PROMPTS.moveLeft}. ` +
-      `BOTTOM-RIGHT region: ${POSE_PROMPTS.celebrate}. ` +
+      poseRegions() +
       `Transparent background, no text, no watermark, no numbers or labels, PNG.`;
 
-    const [sheetResult, collectibleFile] = await Promise.all([
+    const imageSheetPrompt =
+      `Using the attached photo of a child's drawing as direct visual reference, create a 2D ` +
+      `video game character sprite sheet of that exact character — keep it clearly recognizable ` +
+      `as the same character shown in the photo (same shape, colors, and distinctive features). ` +
+      SHEET_LAYOUT_INSTRUCTIONS +
+      `The child calls this character: "${description}". ` +
+      `STYLE: ${styleInstruction} ` +
+      poseRegions() +
+      `Transparent background, no text, no watermark, no numbers or labels, PNG.`;
+
+    const [textSheetBuffer, imageSheetBuffer, collectibleFile] = await Promise.all([
       (async () => {
         const response = await client.images.generate({
-          model: "gpt-image-1",
-          prompt: sheetPrompt,
-          size: "1024x1536",
-          quality: "high",
-          background: "transparent",
-          n: 1,
+          model: "gpt-image-1", prompt: textSheetPrompt,
+          size: "1024x1536", quality: "high", background: "transparent", n: 1,
         });
         const b64 = response.data?.[0]?.b64_json;
-        if (!b64) throw new Error("No image data returned for sprite sheet");
-        const sheetBuffer = Buffer.from(b64, "base64");
+        if (!b64) throw new Error("No image data returned for text-based sprite sheet");
+        return Buffer.from(b64, "base64");
+      })(),
 
-        const poseEntries = await Promise.all(SHEET_LAYOUT.map(async ({ pose, col, row }) => {
-          const cropped = await sharp(sheetBuffer)
-            .extract({
-              left: col * PANEL_W + CROP_INSET,
-              top: row * PANEL_H + CROP_INSET,
-              width: PANEL_W - CROP_INSET * 2,
-              height: PANEL_H - CROP_INSET * 2,
-            })
-            .png()
-            .toBuffer();
-          return [pose, { data: cropped, ext: "png" }] as const;
-        }));
-
-        // Keep the raw, uncropped sheet alongside the cropped poses (saved as sheet.png by the
-        // generic save loop in routes/ai.ts) so generation problems — bad crops, panel bleed,
-        // stray borders — can be diagnosed by comparing it against the final cropped sprites.
-        return { poseEntries, sheet: { data: sheetBuffer, ext: "png" as const } };
+      (async () => {
+        const response = await client.images.edit({
+          model: "gpt-image-1", prompt: imageSheetPrompt,
+          image: await toFile(Buffer.from(drawingBase64, "base64"), "drawing.jpg", { type: "image/jpeg" }),
+          size: "1024x1536", quality: "high", background: "transparent", n: 1,
+        });
+        const b64 = response.data?.[0]?.b64_json;
+        if (!b64) throw new Error("No image data returned for image-to-image sprite sheet");
+        return Buffer.from(b64, "base64");
       })(),
 
       (async (): Promise<SpriteFile> => {
@@ -134,21 +168,27 @@ const provider: ServerAiProvider = {
       })(),
     ]);
 
-    return {
-      sprites: {
-        ...Object.fromEntries(sheetResult.poseEntries),
-        collectible: collectibleFile,
-        sheet: sheetResult.sheet,
-      } as unknown as SpriteBuffers,
-      prompt: sheetPrompt,
+    const [textPoseEntries, imagePoseEntries] = await Promise.all([
+      cropSheet(textSheetBuffer),
+      cropSheet(imageSheetBuffer),
+    ]);
+
+    const textResult: SpriteGenerationResult = {
+      sprites: buildSprites(textPoseEntries, collectibleFile, { data: textSheetBuffer, ext: "png" }),
+      prompt: textSheetPrompt,
     };
+    const imageResult: SpriteGenerationResult = {
+      sprites: buildSprites(imagePoseEntries, collectibleFile, { data: imageSheetBuffer, ext: "png" }),
+      prompt: imageSheetPrompt,
+    };
+
+    return { text: textResult, image: imageResult };
   },
 
-  async generateBackground(description: string, imageBase64: string, styleMode: "shape" | "copy", artStyle?: string): Promise<BackgroundGenerationResult> {
+  async generateBackground(description: string, imageBase64: string, styleMode: "shape" | "copy", artStyle?: string): Promise<BackgroundGenerationChoice> {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    // Vision analysis of the teacher-captured world photo — focus varies by mode, mirroring
-    // generateSprites' shape-vs-copy pattern.
+    // Vision analysis of the teacher-captured world photo — feeds the TEXT-only variant.
     const visionPrompt = styleMode === "copy"
       ? `A child drew this and photographed it to use as their video game's background/world. Write a short SCENE SHEET: describe the exact colors, shapes, and layout so an illustrator could recreate it identically — including the rough childlike style and coloring.${description ? ` The child also described it as: "${description}".` : ""}`
       : `A child drew this and photographed it to use as their video game's background/world. Describe the SCENE and LAYOUT only: setting, key shapes/elements, composition (e.g. sky/ground split). Do NOT mention colors or art style — focus on what's depicted so an illustrator could recreate the scene.${description ? ` The child also described it as: "${description}".` : ""}`;
@@ -183,23 +223,45 @@ const provider: ServerAiProvider = {
       ? `WORLD THEME (this must clearly come through in the final image, even if the photo below doesn't obviously show it): ${description}. `
       : "";
 
-    const backgroundPrompt =
+    // TEXT: pure text-to-image from the vision-derived scene description — never sees the
+    // actual photo. IMAGE: image-to-image — the photo is passed to the model directly and
+    // edited/restyled in place, which should track the original composition more closely.
+    const textPrompt =
       `A tall portrait-orientation background for a children's video game (taller than wide, like a phone screen). ` +
       themeClause +
       `SCENE DETAILS from the child's own drawing/photo: ${sceneDescription}. ` +
       `STYLE: ${styleInstruction} ` +
       `Sky fills the top, ground or scenery at the bottom. No characters, no text, just the scenery.`;
 
-    const response = await client.images.generate({
-      model: "gpt-image-1",
-      prompt: backgroundPrompt,
-      size: "1024x1536",
-      quality: "medium",
-      n: 1,
-    });
-    const b64 = response.data?.[0]?.b64_json;
-    if (!b64) throw new Error("No image data returned for background");
-    return { file: { data: Buffer.from(b64, "base64"), ext: "png" }, prompt: backgroundPrompt };
+    const imagePrompt =
+      `Using the attached photo as the starting point, transform it into a tall portrait-orientation ` +
+      `background for a children's video game (taller than wide, like a phone screen). Keep the same ` +
+      `overall scene and composition as the photo — this should read as a stylized version of the same ` +
+      `place, not a different one. ` +
+      themeClause +
+      `STYLE: ${styleInstruction} ` +
+      `Sky fills the top, ground or scenery at the bottom. No characters, no text, just the scenery.`;
+
+    const [textResponse, imageResponse] = await Promise.all([
+      client.images.generate({
+        model: "gpt-image-1", prompt: textPrompt, size: "1024x1536", quality: "medium", n: 1,
+      }),
+      client.images.edit({
+        model: "gpt-image-1", prompt: imagePrompt,
+        image: await toFile(Buffer.from(imageBase64, "base64"), "world.jpg", { type: "image/jpeg" }),
+        size: "1024x1536", quality: "medium", n: 1,
+      }),
+    ]);
+
+    const textB64 = textResponse.data?.[0]?.b64_json;
+    if (!textB64) throw new Error("No image data returned for text-based background");
+    const imageB64 = imageResponse.data?.[0]?.b64_json;
+    if (!imageB64) throw new Error("No image data returned for image-to-image background");
+
+    return {
+      text:  { file: { data: Buffer.from(textB64, "base64"),  ext: "png" }, prompt: textPrompt },
+      image: { file: { data: Buffer.from(imageB64, "base64"), ext: "png" }, prompt: imagePrompt },
+    };
   },
 };
 

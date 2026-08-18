@@ -323,6 +323,23 @@ kbd {
   display: flex; flex-direction: column; align-items: center; gap: .5rem;
 }
 
+/* ── Choice picker (pick between two generated candidates) ──────────────────── */
+.choice-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 1rem; width: 100%;
+}
+.choice-card {
+  background: #fff; border-radius: var(--radius-hero); padding: .5rem;
+  border: 3px solid transparent; box-shadow: var(--shadow);
+  cursor: pointer; min-height: var(--touch-min);
+  transition: border-color .15s, transform .1s;
+}
+.choice-card:active:not(:disabled) { transform: translateY(2px); }
+.choice-card:hover:not(:disabled) { border-color: var(--orange); }
+.choice-card img { width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: var(--radius); }
+.choice-card:disabled { opacity: .5; cursor: not-allowed; }
+.choice-card--picked { border-color: var(--orange); opacity: 1 !important; }
+
 .sprite-grid {
   display: grid; grid-template-columns: repeat(2, 1fr);
   gap: .75rem; width: 100%;

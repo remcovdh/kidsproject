@@ -1,5 +1,5 @@
 import type { SessionState, Step } from "../main.js";
-import { generateSprites, uploadDrawing, type SpriteVersion } from "../api.js";
+import { generateSprites, chooseSprites, uploadDrawing, type SpriteVersion, type SpriteGenChoice } from "../api.js";
 
 function characterDesc(state: SessionState): string {
   const d = state.characterDescription ?? { what: "character", feeling: "happy", movement: "bouncy" };
@@ -65,13 +65,15 @@ export function renderGenerateSprites(
   const styleMode: "shape" | "copy" = state.characterDescription?.styleMode ?? "shape";
   const artStyle = state.characterDescription?.artStyle ?? "cartoon";
 
-  type Phase = "loading" | "result";
+  type Phase = "loading" | "choose" | "result";
   let phase: Phase = "loading";
   let versions = [...state.spriteVersions];
   let currentVersion: SpriteVersion | null = null;
+  let pendingChoice: SpriteGenChoice | null = null;
 
   function draw() {
     if (phase === "loading") renderLoading();
+    else if (phase === "choose") renderChoose();
     else renderResult();
   }
 
@@ -95,10 +97,9 @@ export function renderGenerateSprites(
     `;
 
     generateSprites(state.childId ?? "anon", desc, styleMode, artStyle)
-      .then((version) => {
-        currentVersion = version;
-        versions = [...versions, version];
-        phase = "result";
+      .then((choice) => {
+        pendingChoice = choice;
+        phase = "choose";
         draw();
       })
       .catch((err: unknown) => {
@@ -119,6 +120,44 @@ export function renderGenerateSprites(
           goToStep("describe-character");
         });
       });
+  }
+
+  function renderChoose() {
+    const choice = pendingChoice!;
+
+    container.innerHTML = `
+      <div class="step step--generate">
+        <h1 class="step__title">Which one do you like better? 🤔</h1>
+        <div class="choice-grid">
+          <button class="choice-card" data-pick="text">
+            <img src="${choice.options.text.sprites.idle}" alt="Option A" />
+          </button>
+          <button class="choice-card" data-pick="image">
+            <img src="${choice.options.image.sprites.idle}" alt="Option B" />
+          </button>
+        </div>
+        <p class="step__subtitle">Tap the one you like!</p>
+      </div>
+    `;
+
+    container.querySelectorAll<HTMLButtonElement>(".choice-card").forEach((card) => {
+      card.addEventListener("click", async () => {
+        const chosen = card.dataset.pick as "text" | "image";
+        container.querySelectorAll<HTMLButtonElement>(".choice-card").forEach((c) => c.disabled = true);
+        card.classList.add("choice-card--picked");
+        try {
+          const version = await chooseSprites(state.childId ?? "anon", choice.versionId, chosen);
+          currentVersion = version;
+          versions = [...versions, version];
+          phase = "result";
+          draw();
+        } catch (err) {
+          console.error("[generate-sprites choose]", err);
+          container.querySelectorAll<HTMLButtonElement>(".choice-card").forEach((c) => c.disabled = false);
+          card.classList.remove("choice-card--picked");
+        }
+      });
+    });
   }
 
   function renderResult() {

@@ -1,5 +1,5 @@
 import type { SessionState, Step } from "../main.js";
-import { fetchPhotoStatus, confirmPhoto, generateBackground } from "../api.js";
+import { fetchPhotoStatus, confirmPhoto, generateBackground, chooseBackground, type BackgroundGenChoice } from "../api.js";
 
 const BG_CHIPS = [
   { v: "a sunny meadow with flowers and butterflies", l: "Meadow",     e: "🌸" },
@@ -35,19 +35,21 @@ export function renderUploadBackground(
 
   const show = state.sessionConfig?.showPrompt ?? false;
 
-  type Phase = "waiting" | "confirm" | "describe" | "loading" | "result";
+  type Phase = "waiting" | "confirm" | "describe" | "loading" | "choose" | "result";
   let phase: Phase = "waiting";
   let photoUrl = "";
   let selectedBgDesc = "";
   let selectedStyle = "";
   let generatedUrl = "";
   let generatedPrompt = "";
+  let pendingChoice: BackgroundGenChoice | null = null;
 
   function draw() {
     if (phase === "waiting") renderWaiting();
     else if (phase === "confirm") renderConfirm();
     else if (phase === "describe") renderDescribe();
     else if (phase === "loading") renderLoading();
+    else if (phase === "choose") renderChoose();
     else renderResult();
   }
 
@@ -217,10 +219,8 @@ export function renderUploadBackground(
 
     (async () => {
       try {
-        const { backgroundUrl, prompt } = await generateBackground(state.childId ?? "", selectedBgDesc, styleMode, artStyle);
-        generatedUrl = backgroundUrl;
-        generatedPrompt = prompt;
-        phase = "result";
+        pendingChoice = await generateBackground(state.childId ?? "", selectedBgDesc, styleMode, artStyle);
+        phase = "choose";
         draw();
       } catch (err) {
         console.error("[background-ai]", err);
@@ -241,6 +241,44 @@ export function renderUploadBackground(
         });
       }
     })();
+  }
+
+  function renderChoose() {
+    const choice = pendingChoice!;
+
+    container.innerHTML = `
+      <div class="step">
+        <h1 class="step__title">Which one do you like better? 🤔</h1>
+        <div class="choice-grid">
+          <button class="choice-card" data-pick="text">
+            <img src="${choice.options.text.backgroundUrl}" alt="Option A" />
+          </button>
+          <button class="choice-card" data-pick="image">
+            <img src="${choice.options.image.backgroundUrl}" alt="Option B" />
+          </button>
+        </div>
+        <p class="step__subtitle">Tap the one you like!</p>
+      </div>
+    `;
+
+    container.querySelectorAll<HTMLButtonElement>(".choice-card").forEach((card) => {
+      card.addEventListener("click", async () => {
+        const chosen = card.dataset.pick as "text" | "image";
+        container.querySelectorAll<HTMLButtonElement>(".choice-card").forEach((c) => c.disabled = true);
+        card.classList.add("choice-card--picked");
+        try {
+          const result = await chooseBackground(state.childId ?? "", choice.versionId, chosen);
+          generatedUrl = result.backgroundUrl;
+          generatedPrompt = result.prompt;
+          phase = "result";
+          draw();
+        } catch (err) {
+          console.error("[upload-background choose]", err);
+          container.querySelectorAll<HTMLButtonElement>(".choice-card").forEach((c) => c.disabled = false);
+          card.classList.remove("choice-card--picked");
+        }
+      });
+    });
   }
 
   function renderResult() {

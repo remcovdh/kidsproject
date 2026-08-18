@@ -61,6 +61,20 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_photo_captures_child ON photo_captures(child_id, kind);
+
+  -- Global (cross-session) tally of which generation approach kids prefer — "text" (generated
+  -- purely from a written description) vs "image" (image-to-image, edited directly from their
+  -- photo). Not session-scoped on purpose: a single ~20-kid session is too small a sample to
+  -- mean much on its own; this is meant to accumulate across every session ever run so the
+  -- choice can eventually be retired in favor of whichever approach clearly wins (that decision
+  -- itself is deliberately deferred — this table only collects the data for now).
+  CREATE TABLE IF NOT EXISTS generation_choices (
+    id         TEXT PRIMARY KEY,
+    kind       TEXT NOT NULL CHECK (kind IN ('character','world')),
+    chosen     TEXT NOT NULL CHECK (chosen IN ('text','image')),
+    child_id   TEXT REFERENCES children(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // Idempotent migration: add children.display_code if it doesn't exist yet

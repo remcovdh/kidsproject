@@ -74,8 +74,7 @@ export function renderRoster(
     return `
       <tr>
         <td class="roster-child">
-          <div class="roster-child__name">${child.name}</div>
-          <div class="roster-child__code">${child.displayCode ?? ""}</div>
+          <div class="roster-child__name">${child.name} ${child.displayCode ?? ""}</div>
         </td>
         ${statusCell(child.childId, "drawing", child.drawingStatus)}
         ${statusCell(child.childId, "world", child.worldStatus)}

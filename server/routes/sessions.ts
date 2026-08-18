@@ -10,13 +10,14 @@ const ALLOWED_PROVIDERS   = ["openai", "gemini", "local"] as const;
 const ALLOWED_GAME_TYPES  = ["catcher"] as const;
 const VALID_SOUND_IDS     = new Set(["boing", "splat", "whoosh", "pop", "squeak", "roar", "giggle", "crash", ""]);
 
-// Random visual code shown to a child ("🦊 Fox 12") so a teacher can tell same-named
-// kids apart on the roster before any character/photo exists to distinguish them by.
-const ANIMALS: Array<[string, string]> = [
-  ["🦊", "Fox"], ["🦉", "Owl"], ["🐻", "Bear"], ["🐼", "Panda"], ["🦁", "Lion"],
-  ["🐯", "Tiger"], ["🐰", "Rabbit"], ["🐸", "Frog"], ["🐢", "Turtle"], ["🐧", "Penguin"],
-  ["🐨", "Koala"], ["🐬", "Dolphin"], ["🐘", "Elephant"], ["🦒", "Giraffe"], ["🦔", "Hedgehog"],
-  ["🐿️", "Squirrel"], ["🐵", "Monkey"], ["🦆", "Duck"], ["🐱", "Cat"], ["🐶", "Dog"],
+// A unique-per-session animal emoji, shown next to the child's own name (e.g. "Robin 🦊") so a
+// helper can tell same-named kids apart before any character/photo exists to distinguish them
+// by. No name/number needed on the emoji itself — the app never assigns the same animal twice
+// within one session (max 20 kids, matches the animal list size), so the symbol alone is
+// already unique; the child's actual name carries the rest.
+const ANIMALS = [
+  "🦊", "🦉", "🐻", "🐼", "🦁", "🐯", "🐰", "🐸", "🐢", "🐧",
+  "🐨", "🐬", "🐘", "🦒", "🦔", "🐿️", "🐵", "🦆", "🐱", "🐶",
 ];
 
 function generateDisplayCode(sessionId: string): string {
@@ -24,13 +25,9 @@ function generateDisplayCode(sessionId: string): string {
     (db.prepare("SELECT display_code FROM children WHERE session_id = ?").all(sessionId) as
       Array<{ display_code: string | null }>).map((r) => r.display_code)
   );
-  for (let i = 0; i < 10; i++) {
-    const [emoji, name] = ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
-    const num  = 1 + Math.floor(Math.random() * 99);
-    const code = `${emoji} ${name} ${num}`;
-    if (!existing.has(code)) return code;
-  }
-  return `${ANIMALS[0][0]} ${ANIMALS[0][1]} ${Date.now() % 1000}`; // fallback, effectively unique
+  const available = ANIMALS.filter((a) => !existing.has(a));
+  if (available.length > 0) return available[Math.floor(Math.random() * available.length)];
+  return ANIMALS[Math.floor(Math.random() * ANIMALS.length)]; // >20 kids in one session — allow a repeat
 }
 
 function newUniqueJoinCode(): string {

@@ -131,13 +131,15 @@ function render() {
     app.appendChild(bar);
   }
 
-  // Persistent code badge — kids reference this to identify themselves to a helper
-  // on the waiting-for-photo screens, and it disambiguates same-named kids on the
-  // teacher's roster since no character/photo exists yet at registration time.
+  // Persistent name + animal badge — kids reference this to identify themselves to a helper
+  // on the waiting-for-photo screens, and the animal disambiguates same-named kids on the
+  // teacher's roster since no character/photo exists yet at registration time. The animal is
+  // never repeated within one session, so the symbol alone is already unique — the child's own
+  // name (nicer to see on-screen than a bare code) carries the rest.
   if (state.childDisplayCode && state.currentStep !== "welcome") {
     const badge = document.createElement("div");
     badge.className = "display-code-badge";
-    badge.textContent = state.childDisplayCode;
+    badge.textContent = `${state.childName ?? ""} ${state.childDisplayCode}`.trim();
     app.appendChild(badge);
   }
 

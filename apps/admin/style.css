@@ -78,7 +78,6 @@ body {
 .roster-loading { text-align: center; color: var(--muted); padding: 2rem 0 !important; }
 
 .roster-child__name { font-weight: 600; }
-.roster-child__code { font-size: .8rem; color: var(--muted); }
 
 .roster-status { display: flex; align-items: center; gap: .5rem; font-size: .85rem; }
 .roster-status--rejected span { color: var(--danger); font-weight: 600; }

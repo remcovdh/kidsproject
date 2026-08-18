@@ -115,15 +115,14 @@ export async function resolveJoinCode(code: string): Promise<{ id: string; name:
   return apiFetch<{ id: string; name: string }>(`${API}/api/sessions/by-code/${encodeURIComponent(code)}`);
 }
 
-const MOCK_ANIMALS = ["🦊 Fox", "🦉 Owl", "🐻 Bear", "🐼 Panda", "🦁 Lion"];
+const MOCK_ANIMALS = ["🦊", "🦉", "🐻", "🐼", "🦁"];
 
 export async function registerChild(sessionId: string, name: string): Promise<{ childId: string; displayCode: string }> {
   if (MOCK_MODE) {
     await sleep(150);
-    const animal = MOCK_ANIMALS[Math.floor(Math.random() * MOCK_ANIMALS.length)];
     return {
       childId: `child_${Math.random().toString(36).slice(2, 8)}`,
-      displayCode: `${animal} ${1 + Math.floor(Math.random() * 99)}`,
+      displayCode: MOCK_ANIMALS[Math.floor(Math.random() * MOCK_ANIMALS.length)],
     };
   }
   return apiFetch<{ childId: string; displayCode: string }>(`${API}/api/sessions/${sessionId}/children`, {

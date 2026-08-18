@@ -1,6 +1,6 @@
 # Kids AI Workshop
 
-A guided web application where children aged 6–12 use AI to turn their own paper drawings into playable browser games. Runs in supervised workshop sessions of up to 20 kids, roughly 90 minutes each.
+A guided web application where children aged 4–8 use AI to turn their own paper drawings into playable browser games. Runs in supervised workshop sessions of up to 20 kids, roughly 90 minutes each.
 
 ## What children learn
 
@@ -14,23 +14,23 @@ These ideas are woven into the flow of the app rather than taught as a lesson. T
 
 ## How a session works
 
-A facilitator creates a session in advance, setting the AI provider and whether the prompt text is shown to children (useful to adapt for reading ability). Children join on their own device or a shared tablet:
+A facilitator creates a session in advance from the admin app, setting the AI provider and whether the prompt text is shown to children (useful to adapt for reading ability). Children join with a short session join code on their own device or a shared tablet:
 
-1. Enter their name
+1. Enter the session's join code, then their name — they get a unique name+animal badge to tell same-named kids apart
 2. Pick a game type — only **Catcher** is available now; more are on the roadmap
-3. Draw a character on paper and photograph it
-4. Optionally draw a background scene
-5. Answer a few structured questions about the character (what is it, how does it move, how does it feel)
-6. Watch the AI generate a sprite pack — idle, moving, action, and celebrate poses
-7. Play an instant preview of their game
-8. Optionally assign sounds and peek at the game code
+3. Draw a character on paper; a facilitator photographs it on their behalf and the child confirms it's theirs
+4. Answer a few structured questions about the character (what is it, how does it move, how does it feel, what style)
+5. The AI generates two versions of the sprite pack — one from the description, one from the photo — and the child picks the one they like best
+6. Play an instant preview of their game
+7. Draw and photograph a world/background the same teacher-assisted way, describe it, and again pick between two AI results
+8. Assign sounds and try the game at least once
 9. Publish to the session gallery so everyone can play each other's games
 
 The moment a child gets their sprite back and it looks different from what they imagined is the moment the learning happens. Surprise is the pedagogy.
 
 ## Design principles
 
-**Visual-first** — all interactions work without reading. Icons, large tap targets, and images carry the interface; text is supplementary. This makes it work for the full 6–12 age range.
+**Visual-first** — all interactions work without reading. Icons, large tap targets, and images carry the interface; text is supplementary. This makes it work for the full 4–8 age range.
 
 **Games run standalone** — the game templates are plain HTML/CSS/JS with no server dependency. After the session, a child can take a zip of their game folder home and open it with `file://` in any browser.
 
@@ -44,7 +44,7 @@ The moment a child gets their sprite back and it looks different from what they 
 kidsproject/
 ├── apps/
 │   ├── session/        # Child-facing guided flow (Vite + TypeScript)
-│   ├── admin/          # Facilitator dashboard — in progress
+│   ├── admin/          # Facilitator app — sessions, roster, teacher-assisted photo capture
 │   └── games/
 │       └── catcher/    # Standalone game template (plain HTML/CSS/JS)
 ├── packages/
@@ -62,7 +62,6 @@ kidsproject/
 
 - Jumper game type (spacebar controls)
 - Memory card group game (collaborative, whole-class activity)
-- Admin dashboard for facilitators (create sessions, live view of all children's prompts)
 - Voice input for children who cannot read or type
 - Children recording their own sound effects
 - Gemini AI provider (OpenAI and local are fully implemented; Gemini is a stub)
@@ -71,4 +70,5 @@ kidsproject/
 
 ---
 
+For running a workshop as a facilitator, see [TEACHER.md](TEACHER.md).
 For running and deploying the project, see [DEVELOPMENT.md](DEVELOPMENT.md).

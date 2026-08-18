@@ -403,15 +403,6 @@ kbd {
   border: 2px solid var(--green); border-radius: var(--radius-hero);
   padding: .75rem 1rem; font-weight: 700; text-align: center;
 }
-.share-box {
-  display: flex; flex-direction: column; align-items: center; gap: .5rem;
-  width: 100%;
-}
-.text-input-readonly {
-  width: 100%; font-size: .95rem; text-align: center;
-  padding: .6rem 1rem; border: 2px solid var(--outline); border-radius: var(--radius-pill);
-  background: #fff; color: var(--text); font-family: var(--font);
-}
 .gallery-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: .75rem; width: 100%;

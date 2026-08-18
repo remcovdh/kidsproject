@@ -12,11 +12,6 @@ export function renderGallery(
       <p class="step__subtitle" id="gallery-subtitle"></p>
       <div id="gallery-banner"></div>
 
-      <div class="share-box">
-        <button class="btn btn--primary" id="share-btn">📤 Share with your family!</button>
-        <input class="text-input-readonly" id="share-link" type="text" readonly hidden />
-      </div>
-
       <div class="gallery-grid" id="gallery-grid"><p class="gallery__loading">Loading...</p></div>
       <button class="btn btn--ghost btn--small" id="refresh-btn">Refresh 🔄</button>
     </div>
@@ -42,25 +37,6 @@ export function renderGallery(
     banner.textContent = `✅ Your game is on the wall, ${state.childName}!`;
     container.querySelector("#gallery-banner")!.replaceWith(banner);
   }
-
-  const shareBtn  = container.querySelector<HTMLButtonElement>("#share-btn")!;
-  const shareLink = container.querySelector<HTMLInputElement>("#share-link")!;
-  const shareUrl  = `${location.origin}${location.pathname}?s=${encodeURIComponent(state.sessionId)}&view=gallery`;
-
-  shareBtn.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      shareBtn.textContent = "Copied! ✅ Send it to your family";
-    } catch {
-      // Clipboard API unavailable (e.g. non-HTTPS) — fall back to a selectable text field.
-      shareLink.value = shareUrl;
-      shareLink.hidden = false;
-      shareLink.focus();
-      shareLink.select();
-      shareBtn.textContent = "Copy this link 👇";
-    }
-    setTimeout(() => { shareBtn.textContent = "📤 Share with your family!"; }, 4000);
-  });
 
   const grid       = container.querySelector<HTMLElement>("#gallery-grid")!;
   const modal      = container.querySelector<HTMLElement>("#game-modal")!;

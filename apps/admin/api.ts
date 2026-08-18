@@ -1,5 +1,17 @@
 const API = "";
 
+// The session app runs on a different origin/port than this admin app, so a shareable gallery
+// link can't just reuse location.origin the way a same-app link could. There's no runtime way
+// for this static build to discover the session app's actual port, so it's a build-time env var
+// (VITE_SESSION_PORT) defaulting to the project's documented standard port (3000) — matches the
+// existing VITE_MOCK pattern in apps/session. Wrong only if a deployment overrides SESSION_PORT
+// without also rebuilding admin with a matching VITE_SESSION_PORT.
+const SESSION_PORT = import.meta.env["VITE_SESSION_PORT"] ?? "3000";
+
+export function sessionGalleryUrl(sessionId: string): string {
+  return `${location.protocol}//${location.hostname}:${SESSION_PORT}/?s=${encodeURIComponent(sessionId)}&view=gallery`;
+}
+
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const r = await fetch(url, options);
   if (!r.ok) {

@@ -1,5 +1,5 @@
 import type { AdminState, Screen } from "../main.js";
-import { fetchRoster, uploadPhoto, fetchSessionInfo, type RosterChild, type PhotoStatus } from "../api.js";
+import { fetchRoster, uploadPhoto, fetchSessionInfo, sessionGalleryUrl, type RosterChild, type PhotoStatus } from "../api.js";
 import { logout } from "../main.js";
 
 const STATUS_LABEL: Record<PhotoStatus, string> = {
@@ -28,6 +28,7 @@ export function renderRoster(
           <p class="panel__subtitle" id="join-code-line">Join code: …</p>
         </div>
         <div class="panel__header-actions">
+          <button class="btn btn--small btn--outline" id="share-gallery-btn">📤 Share gallery with families</button>
           <button class="btn btn--small" id="refresh-btn">Refresh</button>
           <button class="btn btn--small btn--outline" id="logout-btn">Log out</button>
         </div>
@@ -52,6 +53,19 @@ export function renderRoster(
     goToScreen("sessions", { sessionId: "", sessionName: null });
   });
   container.querySelector("#refresh-btn")?.addEventListener("click", load);
+
+  container.querySelector<HTMLButtonElement>("#share-gallery-btn")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget as HTMLButtonElement;
+    const url = sessionGalleryUrl(state.sessionId);
+    try {
+      await navigator.clipboard.writeText(url);
+      btn.textContent = "Copied! ✅";
+    } catch {
+      // Clipboard API unavailable (e.g. non-HTTPS) — fall back to a dialog they can copy from.
+      window.prompt("Copy this link to share with families:", url);
+    }
+    setTimeout(() => { btn.textContent = "📤 Share gallery with families"; }, 3000);
+  });
 
   fetchSessionInfo(state.sessionId).then((info) => {
     const line = container.querySelector<HTMLElement>("#join-code-line");

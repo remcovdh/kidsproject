@@ -1,5 +1,5 @@
 import type { AdminState, Screen } from "../main.js";
-import { fetchSessions, createSession, type SessionSummary } from "../api.js";
+import { fetchSessions, createSession, sessionGalleryUrl, type SessionSummary } from "../api.js";
 import { logout } from "../main.js";
 
 export function renderSessions(
@@ -34,8 +34,8 @@ export function renderSessions(
 
       <h2 class="section-title">Existing sessions</h2>
       <table class="roster-table" id="sessions-table">
-        <thead><tr><th>Name</th><th>Join code</th><th>Kids</th></tr></thead>
-        <tbody id="sessions-body"><tr><td colspan="3" class="roster-loading">Loading…</td></tr></tbody>
+        <thead><tr><th>Name</th><th>Join code</th><th>Kids</th><th>Gallery</th></tr></thead>
+        <tbody id="sessions-body"><tr><td colspan="4" class="roster-loading">Loading…</td></tr></tbody>
       </table>
     </div>
   `;
@@ -73,6 +73,7 @@ export function renderSessions(
         <td>${s.name}</td>
         <td><span class="join-code-badge">${s.joinCode}</span></td>
         <td>${s.childCount}</td>
+        <td><button class="btn btn--small btn--outline share-gallery-btn" data-id="${s.id}">📤 Share</button></td>
       </tr>`;
   }
 
@@ -81,7 +82,7 @@ export function renderSessions(
     try {
       const sessions = await fetchSessions(token);
       if (sessions.length === 0) {
-        body.innerHTML = `<tr><td colspan="3" class="roster-loading">No sessions yet — create one above.</td></tr>`;
+        body.innerHTML = `<tr><td colspan="4" class="roster-loading">No sessions yet — create one above.</td></tr>`;
         return;
       }
       body.innerHTML = sessions.map(rowHtml).join("");
@@ -90,9 +91,22 @@ export function renderSessions(
           goToScreen("roster", { sessionId: row.dataset.id!, sessionName: row.dataset.name ?? null });
         });
       });
+      body.querySelectorAll<HTMLButtonElement>(".share-gallery-btn").forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+          e.stopPropagation(); // don't also trigger the row's "open roster" click
+          const url = sessionGalleryUrl(btn.dataset.id!);
+          try {
+            await navigator.clipboard.writeText(url);
+            btn.textContent = "Copied! ✅";
+          } catch {
+            window.prompt("Copy this link to share with families:", url);
+          }
+          setTimeout(() => { btn.textContent = "📤 Share"; }, 3000);
+        });
+      });
     } catch (err) {
       if (err instanceof Error && err.message === "Unauthorized") { logout(); return; }
-      body.innerHTML = `<tr><td colspan="3" class="roster-loading">Couldn't load sessions: ${err instanceof Error ? err.message : String(err)}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="4" class="roster-loading">Couldn't load sessions: ${err instanceof Error ? err.message : String(err)}</td></tr>`;
     }
   }
 

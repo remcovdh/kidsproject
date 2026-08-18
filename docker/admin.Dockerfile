@@ -10,6 +10,12 @@ RUN npm ci --workspace=@kidsproject/admin --include-workspace-root
 
 COPY apps/admin/ ./apps/admin/
 
+# Baked in at build time so the "share gallery" link points at the session app's actual port —
+# admin has no runtime way to discover it, since they're two separate static builds. Must match
+# the session service's SESSION_PORT if that's been overridden from the default.
+ARG VITE_SESSION_PORT=3000
+ENV VITE_SESSION_PORT=$VITE_SESSION_PORT
+
 RUN npm run build -w @kidsproject/admin
 
 # ── Stage 2: serve with nginx ─────────────────────────────────────────────────
